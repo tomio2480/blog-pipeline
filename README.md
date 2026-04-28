@@ -59,7 +59,7 @@
 
 依存関係マネージャ（`requirements.txt` 等）はスクリプト実装時に導入する．それまで Dependabot は GitHub Actions の ecosystem のみを対象とする．
 
-CI は中央 composite action を呼び出す形で Markdown lint（markdownlint ・ textlint ・ prh）を回す．設定を上書きしたい場合は，リポジトリルートに `.markdownlint-cli2.yaml` ・ `.textlintrc.json` ・ `prh.yml` を置く．これらが中央設定より優先される（per-repo override）．
+CI は中央 composite action を呼び出す形で Markdown lint（`markdownlint` ・ `textlint` ・ `prh`）を回す．設定を上書きしたい場合は，リポジトリルートに `.markdownlint-cli2.yaml` ・ `.textlintrc.json` ・ `prh.yml` を置く．これらが中央設定より優先される（per-repo override）．
 
 ## 🤝 開発に参加する
 
