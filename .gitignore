@@ -29,6 +29,10 @@ htmlcov/
 # Scratch / local notes (never commit)
 .scratch/
 
+# Materials and ENEX (利用者がローカルで生成．Public リポジトリには絶対に含めない)
+materials/
+*.enex
+
 # OS
 .DS_Store
 Thumbs.db
