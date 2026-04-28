@@ -1,17 +1,24 @@
 name: Markdown Lint
 
 # 対象リポジトリの .github/workflows/md-lint.yml として配置する caller workflow．
-# 以下 1 箇所のみ利用者が書き換える：
+# 以下 2 箇所のみ利用者が書き換える：
 #   - `OWNER` を利用する github-workflows のオーナー名に置き換える．
 #     （tomio2480 を直接利用するなら OWNER → tomio2480．自分でフォークした場合は自分のユーザー名）
+#   - `@8382b97a883560c5e05dbd862babd1c8fc8d8994` を利用したい github-workflows のコミット SHA に置き換える．
 #
 # 参照先（@ 以降）の選び方：
-#   - `@main`     : 中央の最新ルール・辞書を常に適用する．既定．
-#   - `@v1`       : v1 系の latest．中央が明示的に移動した commit のみ追随（破壊的変更を避けたい場合）
-#   - `@v1.0.0`   : 不変．完全再現性が必要な場合
+#   - 既定: `@8382b97a883560c5e05dbd862babd1c8fc8d8994 # v2` 形式で SHA pin とバージョンコメントを併記する．
+#     Dependabot が SHA とバージョンの両方を自動追随し，更新は PR で通知される．
+#     本テンプレはこの方式を推奨．
+#   - 代替 1: `@main` — 中央の最新 commit を即時反映．Dependabot による更新検知は働かない．
+#     中央 repo の書き換えが即時反映される点に同意できる場合のみ．
+#   - 代替 2: `@8382b97a883560c5e05dbd862babd1c8fc8d8994 # v2.0.0` 形式 — 完全不変．パッチ追随も止めて固定したい場合．
+#
+# v1 系（`@v1` / `@v1.0.0` 等）は self-detection bug により動作しません．
+# 必ず v2 以降を参照してください（詳細は中央 repo の README）．
 #
 # 設定ファイル（.markdownlint-cli2.yaml / .textlintrc.json / prh.yml）は
-# 呼び出し側に存在すればそれが優先される．無ければ中央の標準設定が使われる．
+# 呼び出し側に存在すればそれが優先される．無ければ参照先 commit の標準設定が使われる．
 
 on:
   pull_request:
@@ -24,10 +31,18 @@ permissions:
 
 jobs:
   lint:
-    uses: tomio2480/github-workflows/.github/workflows/markdown-lint.yml@main
-    # 必要に応じて inputs で上書き可能．詳細は中央リポジトリの README を参照．
-    # reusable workflow 側の既定は node-version "24"（Active LTS）．
-    # with:
-    #   node-version: "22"              # Maintenance LTS に下げる例
-    #   markdown-glob: "docs/**/*.md"   # 対象ディレクトリを絞る例
-    #   filter-mode: "nofilter"         # 既存ファイル全体を指摘したい場合
+    name: Markdown Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        # actions/checkout v4.3.0
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Markdown Lint via composite action
+        uses: tomio2480/github-workflows/.github/actions/markdown-lint@8382b97a883560c5e05dbd862babd1c8fc8d8994 # v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # 必要に応じて inputs で上書き可能．詳細は中央リポジトリの README を参照．
+          # node-version: "22"              # Maintenance LTS に下げる例
+          # markdown-glob: "docs/**/*.md"   # 対象ディレクトリを絞る例
+          # filter-mode: "nofilter"         # 既存ファイル全体を指摘したい場合
