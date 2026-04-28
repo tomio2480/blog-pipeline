@@ -40,20 +40,20 @@
 
 [ARCHITECTURE.md](ARCHITECTURE.md) の「Subagent と Skill の設計」を踏襲する．要点は以下のとおり．
 
-- 機械的処理（ENEX パース， 形態素解析， textlint）はスクリプト
-- 量の多い単純判断（要約， タグ推定）は Haiku Subagent
+- 機械的処理（ENEX パース，形態素解析，textlint）はスクリプト
+- 量の多い単純判断（要約，タグ推定）は Haiku Subagent
 - 文脈横断と本文ドラフトは Sonnet Subagent
 - 全体方針調整と最終確認は Opus 本体
 
-モデル指定は本ファイルおよび各 Subagent ひな形ファイル（`agent-templates/*.md`）で行い， 世代交代に追随できる構造を保つ．
+モデル指定は本ファイルおよび各 Subagent ひな形ファイル（`agent-templates/*.md`）で行い，世代交代に追随できる構造を保つ．
 
 ## 🛠️ 開発の進め方
 
 ### 着手前
 
-- 関連 Issue を確認し， 何を作ろうとしているか明確にする
-- フェーズ単位で区切り， 1 PR で複数フェーズを完走させない
-- 機能追加には対応するテストを先に書く（TDD ， `code-quality` Skill 参照）
+- 関連 Issue を確認し，何を作ろうとしているか明確にする
+- フェーズ単位で区切り，1 PR で複数フェーズを完走させない
+- 機能追加には対応するテストを先に書く（TDD，`code-quality` Skill 参照）
 
 ### 実装中
 
@@ -79,4 +79,4 @@
 - [README.md](README.md) ：リポジトリ概要と利用方法
 - [LICENSE](LICENSE) ：MIT License
 
-`~/.claude/skills/` 配下の `github-dev` ， `code-quality` ， `docs-quality` も状況に応じて参照すること．
+`~/.claude/skills/` 配下の `github-dev`，`code-quality`，`docs-quality` も状況に応じて参照すること．
