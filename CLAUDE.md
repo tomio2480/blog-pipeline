@@ -42,8 +42,8 @@
 
 - 機械的処理（ENEX パース，形態素解析，textlint）はスクリプト
 - 量の多い単純判断（要約，タグ推定）は Haiku Subagent
-- 文脈横断と本文ドラフトは Sonnet Subagent
-- 全体方針調整と最終確認は Opus 本体
+- 章立て・本文ドラフト・内容レビューは Sonnet Subagent
+- 文脈横断のクラスタリング・全体方針調整・最終確認はメイン会話の Opus 本体
 
 モデル指定は本ファイルおよび各 Subagent ひな形ファイル（`agent-templates/*.md`）で行い，世代交代に追随できる構造を保つ．
 
