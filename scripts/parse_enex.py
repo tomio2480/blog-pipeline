@@ -47,9 +47,10 @@ WINDOWS_RESERVED_NAMES = {
 }
 XML_BUILTIN_ENTITIES = {"&amp;", "&lt;", "&gt;", "&quot;", "&apos;"}
 _ENTITY_PATTERN = re.compile(r"&[a-zA-Z][a-zA-Z0-9]*;|&#[0-9]+;|&#[xX][0-9a-fA-F]+;")
-# textlint の全角スペースルールに合わせて強調記法と隣接する場合にスペースを除去する全角記号
-EMPHASIS_RIGHT_PUNCT = "，．、。）」』〉》】］｝！？"
-EMPHASIS_LEFT_PUNCT = "（「『〈《【［｛"
+# textlint の全角スペースルールに合わせて強調記法と隣接する場合にスペースを除去する記号
+# 全角句読点・括弧に加えて，半角の句読点・括弧も対象とする
+EMPHASIS_RIGHT_PUNCT = "，．、。）」』〉》】］｝！？.,!?:;)]}"
+EMPHASIS_LEFT_PUNCT = "（「『〈《【［｛([{"
 
 Source = Union[str, Path, IO[bytes]]
 
@@ -366,10 +367,12 @@ def _render_block(elem: ET.Element) -> str:
     if tag == "blockquote":
         return f"> {_render_inline(elem)}"
     if tag == "div":
-        if any(_local_tag(c.tag).lower() in {"h1", "h2", "h3", "ul", "ol", "blockquote", "div", "p"} for c in elem):
+        if any(_local_tag(c.tag).lower() in {"h1", "h2", "h3", "ul", "ol", "blockquote", "div", "p", "hr"} for c in elem):
             return _render_children_as_blocks(elem)
         return _render_inline(elem)
-    if tag in ("br", "en-media", "hr"):
+    if tag == "hr":
+        return "---"
+    if tag in ("br", "en-media"):
         return ""
     return _render_inline(elem)
 
@@ -381,12 +384,20 @@ def _render_inline(elem: ET.Element) -> str:
     for child in elem:
         ctag = _local_tag(child.tag).lower()
         if ctag in ("b", "strong"):
-            parts.append(f" **{_render_inline(child).strip()}** ")
+            content = _render_inline(child).strip()
+            if content:
+                parts.append(f" **{content}** ")
         elif ctag in ("i", "em"):
-            parts.append(f" *{_render_inline(child).strip()}* ")
+            content = _render_inline(child).strip()
+            if content:
+                parts.append(f" *{content}* ")
         elif ctag == "a":
             href = child.get("href", "")
             parts.append(f"[{_render_inline(child).strip()}]({href})")
+        elif ctag == "code":
+            content = _render_inline(child).strip()
+            if content:
+                parts.append(f"`{content}`")
         elif ctag == "br":
             parts.append("\n")
         elif ctag == "en-media":
@@ -402,16 +413,25 @@ def _normalize_emphasis_spacing(s: str) -> str:
     """強調記法 `**` ／ `*` の前後のスペースを正規化する．
 
     1. 連続スペースを 1 つへ折りたたむ（元 ENML に既にスペースがあった場合の二重スペース
-       副作用を抑える）．設計書ルール「直前と直後に半角スペースを挟む」は半角文字隣接で
-       維持する．
-    2. 全角句読点・括弧と隣接するスペースは除去する．textlint の `ja-no-space-around-
-       parentheses` 等との衝突を避ける．多くの Markdown レンダラーは全角文字隣接でも
-       強調記法を正しく解釈するため実害はない．
+       副作用を抑える）．
+    2. 全角句読点・括弧および全角文字（非 ASCII）と隣接するスペースは除去する．
+       textlint の `ja-no-space-around-parentheses` 等との衝突を避けるとともに，
+       日本語文書としての見栄えを優先する．多くの Markdown レンダラーは全角文字隣接でも
+       強調記法を正しく解釈する．
+    3. 半角句読点・括弧と隣接するスペースも除去する（`!` ／ `,` ／ `)` 等）．
     """
     s = re.sub(r" {2,}(\*\*|\*)", r" \1", s)
     s = re.sub(r"(\*\*|\*) {2,}", r"\1 ", s)
-    s = re.sub(rf"(\*\*|\*) ([{re.escape(EMPHASIS_RIGHT_PUNCT)}])", r"\1\2", s)
-    s = re.sub(rf"([{re.escape(EMPHASIS_LEFT_PUNCT)}]) (\*\*|\*)", r"\1\2", s)
+    s = re.sub(
+        rf"(\*\*|\*) ([{re.escape(EMPHASIS_RIGHT_PUNCT)}]|[^\x00-\x7f])",
+        r"\1\2",
+        s,
+    )
+    s = re.sub(
+        rf"([{re.escape(EMPHASIS_LEFT_PUNCT)}]|[^\x00-\x7f]) (\*\*|\*)",
+        r"\1\2",
+        s,
+    )
     return s
 
 

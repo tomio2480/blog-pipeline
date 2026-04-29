@@ -108,9 +108,10 @@ def test_happy_markdown_ai_structured(happy_note: Note) -> None:
     assert "> 引用したいテキスト" in ai
 
 
-def test_happy_markdown_bold_with_outer_spaces(happy_note: Note) -> None:
+def test_happy_markdown_bold_no_outer_space_with_japanese_neighbor(happy_note: Note) -> None:
     md = note_to_markdown(happy_note)
-    assert " **架空のフレームワーク** " in md
+    assert "**架空のフレームワーク**" in md
+    assert " **架空のフレームワーク** " not in md
 
 
 # ---------- enml_to_markdown ユニット ----------
@@ -129,17 +130,17 @@ def test_enml_link_to_markdown() -> None:
     assert "[リンク](https://example.com/x)" in enml_to_markdown(enml)
 
 
-def test_enml_bold_outer_space() -> None:
+def test_enml_bold_no_space_with_japanese_neighbor() -> None:
     enml = "<p>前後<b>強調</b>あり</p>"
     out = enml_to_markdown(enml)
-    assert " **強調** " in out
+    assert "前後**強調**あり" in out
 
 
 def test_enml_bold_at_line_edges_keeps_outer_space() -> None:
-    enml = "<p><b>先頭</b></p><p>あとに<b>末尾</b></p>"
+    enml = "<p><b>head</b></p><p>also <b>tail</b></p>"
     out = enml_to_markdown(enml)
-    assert " **先頭** " in out
-    assert " **末尾** " in out
+    assert " **head** " in out
+    assert " **tail** " in out
 
 
 def test_enml_bullet_list() -> None:
@@ -272,6 +273,32 @@ def test_namespaced_enml_list_items_rendered() -> None:
     out = enml_to_markdown(enml)
     assert "- alpha" in out
     assert "- beta" in out
+
+
+def test_enml_hr_renders_as_thematic_break() -> None:
+    enml = "<div><p>前段</p><hr/><p>後段</p></div>"
+    out = enml_to_markdown(enml)
+    assert "---" in out
+
+
+def test_enml_empty_bold_does_not_emit_markup() -> None:
+    enml = "<p>foo<b></b>bar</p>"
+    out = enml_to_markdown(enml)
+    assert "**" not in out
+    assert "foobar" in out
+
+
+def test_enml_inline_code_renders_as_backticks() -> None:
+    enml = "<p>see <code>parse_enex</code> for detail</p>"
+    out = enml_to_markdown(enml)
+    assert "`parse_enex`" in out
+
+
+def test_enml_bold_no_space_before_half_width_punctuation() -> None:
+    enml = "<p>see <b>foo</b>, then <b>bar</b>!</p>"
+    out = enml_to_markdown(enml)
+    assert "**foo**," in out
+    assert "**bar**!" in out
 
 
 # ---------- sanitize_filename ----------
