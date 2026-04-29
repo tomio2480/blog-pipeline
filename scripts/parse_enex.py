@@ -180,7 +180,12 @@ def extract_transcription(en_media_style: str) -> tuple[str, str, list[str]]:
     if not isinstance(data, dict):
         return "", "absent", []
     state = str(data.get("transcription_state", "absent"))
-    languages = list(data.get("languages", []))
+    raw_languages = data.get("languages", [])
+    languages = (
+        [str(lang) for lang in raw_languages if lang is not None]
+        if isinstance(raw_languages, list)
+        else []
+    )
     segments = data.get("segments", []) or []
     text = "\n".join(
         seg.get("text", "") for seg in segments if isinstance(seg, dict) and seg.get("text")

@@ -157,7 +157,8 @@ def test_enml_blockquote() -> None:
 def test_enml_entity_decoding() -> None:
     enml = "<p>A&nbsp;B&amp;C&lt;D</p>"
     out = enml_to_markdown(enml)
-    assert "A" in out and "B&C<D" in out
+    assert "A" in out
+    assert "B&C<D" in out
 
 
 # ---------- extract_transcription ユニット ----------
@@ -170,7 +171,8 @@ def test_extract_transcription_segments_joined() -> None:
         '"segments":[{"text":"foo"},{"text":"bar"}]};'
     )
     text, state, langs = extract_transcription(style)
-    assert "foo" in text and "bar" in text
+    assert "foo" in text
+    assert "bar" in text
     assert state == "transcribed"
     assert langs == ["ja"]
 
@@ -337,7 +339,6 @@ def test_write_notes_collision_suffix(tmp_path: Path) -> None:
     enex = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<en-export application="Evernote" version="10.0">'
-        + _make_minimal_note("同じタイトル", "20260428T094931Z") * 0  # placeholder
         + _make_minimal_note("同じタイトル", "20260428T094931Z")
         + _make_minimal_note("同じタイトル", "20260428T094931Z")
         + "</en-export>"
@@ -359,6 +360,7 @@ def _make_minimal_note(
     title: str,
     created: str = "20260428T094931Z",
     body: str = "<en-note></en-note>",
+    *,
     tags: list[str] | None = None,
     with_resource: bool = False,
 ) -> str:
