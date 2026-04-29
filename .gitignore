@@ -32,6 +32,8 @@ htmlcov/
 # Materials and ENEX (利用者がローカルで生成．Public リポジトリには絶対に含めない)
 materials/
 *.enex
+# 例外：合成 fixture（個人情報を含まない）はテスト用にコミットする
+!tests/fixtures/*.enex
 
 # OS
 .DS_Store
