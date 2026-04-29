@@ -237,6 +237,41 @@ def test_enml_bold_no_space_inside_full_width_brackets() -> None:
     assert "（**強調**）" in out
 
 
+def test_namespaced_enex_note_fields_extracted(tmp_path: Path) -> None:
+    enex = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<en-export xmlns="http://xml.evernote.com/pub/evernote-export.xsd" '
+        'application="Evernote" version="10.0">'
+        "<note>"
+        "<title>名前空間付き</title>"
+        "<content><![CDATA[<en-note><h1>章</h1><p>本文．</p></en-note>]]></content>"
+        "<created>20260428T094931Z</created>"
+        "<updated>20260428T094931Z</updated>"
+        "<tag>tagX</tag>"
+        "<note-attributes><author>alice</author></note-attributes>"
+        "</note>"
+        "</en-export>"
+    )
+    path = _write_enex(tmp_path, enex, "namespaced.enex")
+    notes = list(parse_enex(path))
+    assert len(notes) == 1
+    note = notes[0]
+    assert note.title == "名前空間付き"
+    assert note.tags == ["tagX"]
+    assert note.author == "alice"
+    assert note.created == "2026-04-28T09:49:31Z"
+
+
+def test_namespaced_enml_list_items_rendered() -> None:
+    enml = (
+        '<ul xmlns="http://xml.evernote.com/pub/enml2.dtd">'
+        "<li>alpha</li><li>beta</li></ul>"
+    )
+    out = enml_to_markdown(enml)
+    assert "- alpha" in out
+    assert "- beta" in out
+
+
 # ---------- sanitize_filename ----------
 
 

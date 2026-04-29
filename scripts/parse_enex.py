@@ -73,17 +73,27 @@ class Note:
 
 
 def parse_enex(source: Source) -> Iterator[Note]:
-    """ENEX を 1 ノートずつ Note へ変換して yield する．"""
+    """ENEX を 1 ノートずつ Note へ変換して yield する．
+
+    `(start, end)` イベントで iterparse し，ルート要素を取得したうえで note 終端ごとに
+    `root.clear()` を呼ぶ．これにより巨大 ENEX でも処理済み note がルート直下に
+    蓄積してメモリを圧迫することを防ぐ．タグ比較は namespace を無視して行う．
+    """
     src: str | IO[bytes]
     if isinstance(source, Path):
         src = str(source)
     else:
         src = source
-    context = ET.iterparse(src, events=("end",))
-    for _, elem in context:
-        if elem.tag == "note":
+    context = iter(ET.iterparse(src, events=("start", "end")))
+    try:
+        _, root = next(context)
+    except StopIteration:
+        return
+    for event, elem in context:
+        if event == "end" and _local_tag(elem.tag).lower() == "note":
             yield _build_note(elem)
             elem.clear()
+            root.clear()
 
 
 def note_to_markdown(note: Note) -> str:
@@ -196,15 +206,15 @@ def enml_to_markdown(enml: str) -> str:
 
 
 def _build_note(note_elem: ET.Element) -> Note:
-    title = (note_elem.findtext("title") or "").strip()
-    created = _enex_datetime_to_iso(note_elem.findtext("created") or "")
-    updated = _enex_datetime_to_iso(note_elem.findtext("updated") or "")
-    tags = [(t.text or "").strip() for t in note_elem.findall("tag") if t.text]
-    author = note_elem.findtext("note-attributes/author")
+    title = (note_elem.findtext("{*}title") or "").strip()
+    created = _enex_datetime_to_iso(note_elem.findtext("{*}created") or "")
+    updated = _enex_datetime_to_iso(note_elem.findtext("{*}updated") or "")
+    tags = [(t.text or "").strip() for t in note_elem.findall("{*}tag") if t.text]
+    author = note_elem.findtext("{*}note-attributes/{*}author")
     if author is not None:
         author = author.strip() or None
 
-    content_xml = note_elem.findtext("content") or ""
+    content_xml = note_elem.findtext("{*}content") or ""
     (
         attachments,
         transcript_text,
@@ -340,12 +350,12 @@ def _render_block(elem: ET.Element) -> str:
         prefix = "#" * int(tag[1])
         return f"{prefix} {_render_inline(elem)}".strip()
     if tag == "ul":
-        items = [f"- {_render_inline(li)}" for li in elem.findall("li")]
+        items = [f"- {_render_inline(li)}" for li in elem.findall("{*}li")]
         return "\n".join(items)
     if tag == "ol":
         items = [
             f"{i + 1}. {_render_inline(li)}"
-            for i, li in enumerate(elem.findall("li"))
+            for i, li in enumerate(elem.findall("{*}li"))
         ]
         return "\n".join(items)
     if tag == "blockquote":
