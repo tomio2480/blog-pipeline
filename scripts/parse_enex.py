@@ -148,7 +148,11 @@ def write_notes(notes: Iterable[Note], output_dir: Path) -> list[Path]:
 
 
 def extract_transcription(en_media_style: str) -> tuple[str, str, list[str]]:
-    """`--en-transcription` JSON から (連結テキスト, 状態, languages) を返す．"""
+    """`--en-transcription` JSON から (連結テキスト, 状態, languages) を返す．
+
+    json.JSONDecoder().raw_decode() を使い，先頭から有効な JSON オブジェクトのみを
+    切り出す．JSON 文字列値内に `}` が含まれる場合も誤って切断しない．
+    """
     if not en_media_style:
         return "", "absent", []
     marker = "--en-transcription:"
@@ -156,23 +160,11 @@ def extract_transcription(en_media_style: str) -> tuple[str, str, list[str]]:
     if idx < 0:
         return "", "absent", []
     rest = en_media_style[idx + len(marker):].lstrip()
-    if not rest.startswith("{"):
-        return "", "absent", []
-    depth = 0
-    end_idx = -1
-    for i, ch in enumerate(rest):
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                end_idx = i + 1
-                break
-    if end_idx < 0:
-        return "", "absent", []
     try:
-        data = json.loads(rest[:end_idx])
+        data, _ = json.JSONDecoder().raw_decode(rest)
     except json.JSONDecodeError:
+        return "", "absent", []
+    if not isinstance(data, dict):
         return "", "absent", []
     state = str(data.get("transcription_state", "absent"))
     languages = list(data.get("languages", []))
@@ -367,12 +359,12 @@ def _render_inline(elem: ET.Element) -> str:
     for child in elem:
         ctag = _local_tag(child.tag).lower()
         if ctag in ("b", "strong"):
-            parts.append(f" **{_inline_text(child)}** ")
+            parts.append(f" **{_render_inline(child).strip()}** ")
         elif ctag in ("i", "em"):
-            parts.append(f" *{_inline_text(child)}* ")
+            parts.append(f" *{_render_inline(child).strip()}* ")
         elif ctag == "a":
             href = child.get("href", "")
-            parts.append(f"[{_inline_text(child)}]({href})")
+            parts.append(f"[{_render_inline(child).strip()}]({href})")
         elif ctag == "br":
             parts.append("\n")
         elif ctag == "en-media":
@@ -381,18 +373,18 @@ def _render_inline(elem: ET.Element) -> str:
             parts.append(_render_inline(child))
         if child.tail:
             parts.append(child.tail)
-    return "".join(parts)
+    return _normalize_emphasis_spacing("".join(parts))
 
 
-def _inline_text(elem: ET.Element) -> str:
-    parts: list[str] = []
-    if elem.text:
-        parts.append(elem.text)
-    for child in elem:
-        parts.append(_inline_text(child))
-        if child.tail:
-            parts.append(child.tail)
-    return "".join(parts).strip()
+def _normalize_emphasis_spacing(s: str) -> str:
+    """強調記法 `**` ／ `*` の前後の連続スペースを 1 つへ折りたたむ．
+
+    設計書ルール「直前と直後に半角スペースを挟む」を満たしつつ，元 ENML に既にスペースが
+    あった場合の二重スペース副作用を抑える．句読点の前後は変更しない．
+    """
+    s = re.sub(r" {2,}(\*\*|\*)", r" \1", s)
+    s = re.sub(r"(\*\*|\*) {2,}", r"\1 ", s)
+    return s
 
 
 def _yaml_frontmatter(note: Note) -> str:

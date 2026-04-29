@@ -190,6 +190,34 @@ def test_extract_transcription_returns_absent_for_empty_style() -> None:
     assert langs == []
 
 
+def test_extract_transcription_handles_brace_inside_string() -> None:
+    style = (
+        '--en-transcription:{"version":1,"languages":["ja"],'
+        '"transcription_state":"transcribed",'
+        '"segments":[{"text":"foo}bar"},{"text":"baz"}]};'
+    )
+    text, state, langs = extract_transcription(style)
+    assert "foo}bar" in text
+    assert "baz" in text
+    assert state == "transcribed"
+    assert langs == ["ja"]
+
+
+def test_enml_nested_emphasis_preserved() -> None:
+    enml = "<p>before<b>bold <i>italic</i></b>after</p>"
+    out = enml_to_markdown(enml)
+    assert "*italic*" in out
+    assert "**bold" in out
+
+
+def test_enml_bold_no_double_space_when_text_already_has_space() -> None:
+    enml = "<p>foo <b>bar</b> baz</p>"
+    out = enml_to_markdown(enml)
+    assert "  **" not in out
+    assert "**  " not in out
+    assert "foo **bar** baz" in out
+
+
 # ---------- sanitize_filename ----------
 
 
