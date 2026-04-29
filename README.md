@@ -79,7 +79,7 @@ ENEX ファイルを Markdown へ変換する．
 python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
 ```
 
-出力は 1 ノート 1 ファイルで，フロントマター付き Markdown となる．3 セクション構成（ 🗒️ 人間メモ ／ 🤖 Evernote AI 構造化情報 ／ 🗣️ 生の文字起こし）．ENEX 内の音声 base64 データは出力に含めない．
+出力は 1 ノート 1 ファイルで，フロントマター付き Markdown となる．3 セクション構成（🗒️ 人間メモ／🤖 Evernote AI 構造化情報／🗣️ 生の文字起こし）．ENEX 内の音声 base64 データは出力に含めない．
 
 ### テスト
 

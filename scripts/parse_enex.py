@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import sys
@@ -44,18 +45,8 @@ WINDOWS_RESERVED_NAMES = {
     *(f"COM{i}" for i in range(1, 10)),
     *(f"LPT{i}" for i in range(1, 10)),
 }
-HTML_ONLY_ENTITIES = {
-    "&nbsp;": " ",
-    "&copy;": "©",
-    "&reg;": "®",
-    "&trade;": "™",
-    "&hellip;": "…",
-    "&mdash;": "—",
-    "&ndash;": "–",
-    "&laquo;": "«",
-    "&raquo;": "»",
-    "&middot;": "·",
-}
+XML_BUILTIN_ENTITIES = {"&amp;", "&lt;", "&gt;", "&quot;", "&apos;"}
+_ENTITY_PATTERN = re.compile(r"&[a-zA-Z][a-zA-Z0-9]*;|&#[0-9]+;|&#[xX][0-9a-fA-F]+;")
 
 Source = Union[str, Path, IO[bytes]]
 
@@ -305,9 +296,20 @@ def _parse_enml_content(
 
 
 def _replace_html_entities(text: str) -> str:
-    for entity, replacement in HTML_ONLY_ENTITIES.items():
-        text = text.replace(entity, replacement)
-    return text
+    """XML 基本実体（ &amp; / &lt; / &gt; / &quot; / &apos; ）以外のエンティティを decode する．
+
+    ENML には &nbsp; / &mdash; / &hellip; / &ldquo; / &copy; など多種多様な HTML
+    エンティティが含まれる．これらを未処理のままだと ET.fromstring が ParseError を投げ
+    本文が空になる．XML 基本実体は ET parser が後段で decode するため温存する．
+    """
+
+    def _decode(match: re.Match[str]) -> str:
+        entity = match.group(0)
+        if entity in XML_BUILTIN_ENTITIES:
+            return entity
+        return html.unescape(entity)
+
+    return _ENTITY_PATTERN.sub(_decode, text)
 
 
 def _local_tag(tag: str) -> str:
@@ -425,7 +427,12 @@ def _yaml_frontmatter(note: Note) -> str:
 
 
 def _yaml_escape(s: str) -> str:
-    return s.replace("\\", "\\\\").replace('"', '\\"')
+    """YAML double-quoted scalar として安全な形へエスケープする．
+
+    json.dumps の double-quoted 文字列リテラルは YAML double-quoted scalar と
+    互換のため，改行・タブ等の制御文字を含むタイトルでもフロントマターが壊れない．
+    """
+    return json.dumps(s, ensure_ascii=False)[1:-1]
 
 
 def _resolve_collision(output_dir: Path, base_name: str) -> Path:

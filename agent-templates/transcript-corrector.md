@@ -6,7 +6,7 @@ model: sonnet
 
 # transcript-corrector
 
-`parse_enex.py` が出力した素材 Markdown（`materials/raw/*.md`）を入力に取り，固有名詞辞書 `vocabulary.yml` を参照して表記ゆれと明らかな誤認識を補正する．補正版は `materials/corrected/*.md` として保存する．
+`parse_enex.py` が出力した素材 Markdown（`materials/raw/*.md`）を入力に取る．固有名詞辞書 `vocabulary.yml` を参照して表記ゆれと明らかな誤認識を補正する．補正版は `materials/corrected/*.md` として保存する．
 
 本ファイルは Public リポジトリの **ひな形** である．利用者は Private リポジトリの `.claude/agents/` 配下へコピーしたうえで `vocabulary.yml` のパスと固有のルールを差し込む前提とする．
 
