@@ -218,6 +218,25 @@ def test_enml_bold_no_double_space_when_text_already_has_space() -> None:
     assert "foo **bar** baz" in out
 
 
+def test_enml_numeric_entity_does_not_break_parser() -> None:
+    enml = "<p>A&#38;B&#60;C&#62;D</p>"
+    out = enml_to_markdown(enml)
+    assert "A&B<C>D" in out
+
+
+def test_enml_bold_no_space_before_full_width_punctuation() -> None:
+    enml = "<p>これは<b>強調</b>，あとに続く．</p>"
+    out = enml_to_markdown(enml)
+    assert "**強調**，" in out
+    assert "** ，" not in out
+
+
+def test_enml_bold_no_space_inside_full_width_brackets() -> None:
+    enml = "<p>（<b>強調</b>）</p>"
+    out = enml_to_markdown(enml)
+    assert "（**強調**）" in out
+
+
 # ---------- sanitize_filename ----------
 
 

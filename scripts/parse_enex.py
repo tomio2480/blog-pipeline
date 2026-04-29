@@ -47,6 +47,9 @@ WINDOWS_RESERVED_NAMES = {
 }
 XML_BUILTIN_ENTITIES = {"&amp;", "&lt;", "&gt;", "&quot;", "&apos;"}
 _ENTITY_PATTERN = re.compile(r"&[a-zA-Z][a-zA-Z0-9]*;|&#[0-9]+;|&#[xX][0-9a-fA-F]+;")
+# textlint の全角スペースルールに合わせて強調記法と隣接する場合にスペースを除去する全角記号
+EMPHASIS_RIGHT_PUNCT = "，．、。）」』〉》】］｝！？"
+EMPHASIS_LEFT_PUNCT = "（「『〈《【［｛"
 
 Source = Union[str, Path, IO[bytes]]
 
@@ -293,13 +296,17 @@ def _replace_html_entities(text: str) -> str:
     ENML には &nbsp; / &mdash; / &hellip; / &ldquo; / &copy; など多種多様な HTML
     エンティティが含まれる．これらを未処理のままだと ET.fromstring が ParseError を投げ
     本文が空になる．XML 基本実体は ET parser が後段で decode するため温存する．
+
+    数値エンティティ（ &#38; → & など）が XML 文法を壊さないよう，decode 結果に対し
+    html.escape で再エスケープし，ET parser が後段で正しく decode できる形にする．
     """
 
     def _decode(match: re.Match[str]) -> str:
         entity = match.group(0)
         if entity in XML_BUILTIN_ENTITIES:
             return entity
-        return html.unescape(entity)
+        decoded = html.unescape(entity)
+        return html.escape(decoded, quote=False)
 
     return _ENTITY_PATTERN.sub(_decode, text)
 
@@ -377,13 +384,19 @@ def _render_inline(elem: ET.Element) -> str:
 
 
 def _normalize_emphasis_spacing(s: str) -> str:
-    """強調記法 `**` ／ `*` の前後の連続スペースを 1 つへ折りたたむ．
+    """強調記法 `**` ／ `*` の前後のスペースを正規化する．
 
-    設計書ルール「直前と直後に半角スペースを挟む」を満たしつつ，元 ENML に既にスペースが
-    あった場合の二重スペース副作用を抑える．句読点の前後は変更しない．
+    1. 連続スペースを 1 つへ折りたたむ（元 ENML に既にスペースがあった場合の二重スペース
+       副作用を抑える）．設計書ルール「直前と直後に半角スペースを挟む」は半角文字隣接で
+       維持する．
+    2. 全角句読点・括弧と隣接するスペースは除去する．textlint の `ja-no-space-around-
+       parentheses` 等との衝突を避ける．多くの Markdown レンダラーは全角文字隣接でも
+       強調記法を正しく解釈するため実害はない．
     """
     s = re.sub(r" {2,}(\*\*|\*)", r" \1", s)
     s = re.sub(r"(\*\*|\*) {2,}", r"\1 ", s)
+    s = re.sub(rf"(\*\*|\*) ([{re.escape(EMPHASIS_RIGHT_PUNCT)}])", r"\1\2", s)
+    s = re.sub(rf"([{re.escape(EMPHASIS_LEFT_PUNCT)}]) (\*\*|\*)", r"\1\2", s)
     return s
 
 
