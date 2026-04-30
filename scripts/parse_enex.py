@@ -222,13 +222,14 @@ def _build_note(note_elem: ET.Element) -> Note:
 
     content_xml = note_elem.findtext("{*}content") or ""
     (
-        attachments,
+        en_media_attachments,
         transcript_text,
         state,
         langs,
         memo_enml,
         ai_enml,
     ) = _parse_enml_content(content_xml)
+    attachments = _collect_attachments(note_elem, en_media_attachments)
 
     return Note(
         title=title,
@@ -243,6 +244,33 @@ def _build_note(note_elem: ET.Element) -> Note:
         human_memo_enml=memo_enml,
         ai_structured_enml=ai_enml,
     )
+
+
+def _collect_attachments(
+    note_elem: ET.Element,
+    en_media_attachments: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    """添付メタデータを `<resource>` を canonical 情報源として収集する．
+
+    `<resource><data hash="...">` と `<resource><mime>` を正本とし，
+    `<en-media>` 由来の hash + type を fallback として補完する．これにより
+    `<en-media>` 参照のないノートでも attachments が記録される．
+    """
+    seen: set[str] = set()
+    out: list[dict[str, str]] = []
+    for resource in note_elem.findall("{*}resource"):
+        mime_elem = resource.find("{*}mime")
+        mime = (mime_elem.text or "").strip() if mime_elem is not None else ""
+        data_elem = resource.find("{*}data")
+        h = data_elem.get("hash") if data_elem is not None else None
+        if h and mime and h not in seen:
+            out.append({"hash": h, "type": mime})
+            seen.add(h)
+    for em in en_media_attachments:
+        if em["hash"] not in seen:
+            out.append(em)
+            seen.add(em["hash"])
+    return out
 
 
 def _enex_datetime_to_iso(value: str) -> str:
@@ -314,7 +342,8 @@ def _replace_html_entities(text: str) -> str:
     本文が空になる．XML 基本実体は ET parser が後段で decode するため温存する．
 
     数値エンティティ（ &#38; → & など）が XML 文法を壊さないよう，decode 結果に対し
-    html.escape で再エスケープし，ET parser が後段で正しく decode できる形にする．
+    html.escape(quote=True) で再エスケープし，ET parser が後段で正しく decode できる
+    形にする．`&#34;` ／ `&#39;` decode 後の `"` ／ `'` も属性値内で問題を起こさない．
     """
 
     def _decode(match: re.Match[str]) -> str:
@@ -322,7 +351,7 @@ def _replace_html_entities(text: str) -> str:
         if entity in XML_BUILTIN_ENTITIES:
             return entity
         decoded = html.unescape(entity)
-        return html.escape(decoded, quote=False)
+        return html.escape(decoded, quote=True)
 
     return _ENTITY_PATTERN.sub(_decode, text)
 

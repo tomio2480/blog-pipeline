@@ -335,6 +335,36 @@ def test_enml_br_outputs_two_space_newline() -> None:
     assert "foo  \nbar" in out
 
 
+def test_resource_only_attachment_recorded(tmp_path: Path) -> None:
+    enex = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<en-export application="Evernote" version="10.0">'
+        "<note>"
+        "<title>resource のみ</title>"
+        "<content><![CDATA[<en-note><h1>章</h1></en-note>]]></content>"
+        "<created>20260428T094931Z</created>"
+        "<updated>20260428T094931Z</updated>"
+        "<note-attributes><author>alice</author></note-attributes>"
+        "<resource>"
+        '<data encoding="base64" hash="r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0">AAEC</data>'
+        "<mime>audio/mp4</mime>"
+        "</resource>"
+        "</note>"
+        "</en-export>"
+    )
+    path = _write_enex(tmp_path, enex, "resource_only.enex")
+    note = next(parse_enex(path))
+    assert note.attachments == [
+        {"hash": "r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0r0", "type": "audio/mp4"}
+    ]
+
+
+def test_enml_numeric_quote_entity_in_attribute_value() -> None:
+    enml = '<p>see <a href="https://example.com/?q=&#34;x&#34;">link</a></p>'
+    out = enml_to_markdown(enml)
+    assert "[link](https://example.com/?q=" in out
+
+
 # ---------- sanitize_filename ----------
 
 
@@ -481,7 +511,7 @@ def test_no_h1_yields_empty_ai_section(tmp_path: Path) -> None:
     transcription_start = md.index("## 🗣️ 生の文字起こし")
     ai = md[ai_start:transcription_start].strip()
     body_only = ai.removeprefix("## 🤖 Evernote AI 構造化情報").strip()
-    assert body_only in {"", "（構造化情報なし）"}
+    assert body_only == "（構造化情報なし）"
 
 
 def test_multiple_en_media_collected(tmp_path: Path) -> None:
