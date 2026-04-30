@@ -38,14 +38,14 @@
 
 ## 🛤️ 実装フェーズと現状
 
-実装は 0 から 5 までの 6 フェーズで進める．現在はフェーズ 0，リポジトリ枠の作成段階にある．各フェーズの進捗は GitHub Issue（`phase-N` ラベル）で追跡する．
+実装は 0 から 5 までの 6 フェーズで進める．フェーズ 0 はクローズ済みで，現在はフェーズ 1（取り込み補助スクリプトと文字起こし校正）に着手している．各フェーズの進捗は GitHub Issue（`phase-N` ラベル）で追跡する．
 
 表 2 フェーズと主な成果物
 
 | フェーズ | 主な成果物 | 状態 |
 |---|---|---|
-| 0 | リポジトリ作成と初期構造，CLAUDE.md，ARCHITECTURE.md | 着手中 |
-| 1 | `parse_enex.py`，`agent-templates/transcript-corrector.md` | 未着手 |
+| 0 | リポジトリ作成と初期構造，CLAUDE.md，ARCHITECTURE.md | 完了 |
+| 1 | `parse_enex.py`，`agent-templates/transcript-corrector.md` | 実装中 |
 | 2 | `note-summarizer`，`note-tagger`，`list_materials.py`，`propose-articles` | 未着手 |
 | 3 | `article-proposer`，`article-drafter`，`structure-note`，`writing-style` ひな形 | 未着手 |
 | 4 | `.textlintrc.json`，`prh.yml`，`.markdownlint-cli2.yaml`，`draft-reviewer`，`review-draft`，`publish.py` | 未着手 |
@@ -55,11 +55,43 @@
 
 ## 🔧 セットアップ
 
-各スクリプトはフェーズ 1 以降で実装する．現段階では空のディレクトリと .gitkeep のみが置かれている．
+スクリプト本体は `scripts/` 配下にある．依存はサードパーティ非依存（標準ライブラリのみ）で実装するが，テストは `pytest` を使う．
 
-依存関係マネージャ（`requirements.txt` 等）はスクリプト実装時に導入する．それまで Dependabot は GitHub Actions の ecosystem のみを対象とする．
+### Python 環境
 
-CI は中央 composite action を呼び出す形で Markdown lint（`markdownlint` ・ `textlint` ・ `prh`）を回す．設定を上書きしたい場合は，リポジトリルートに `.markdownlint-cli2.yaml` ・ `.textlintrc.json` ・ `prh.yml` を置く．これらが中央設定より優先される（per-repo override）．
+Python 3.11 以上が必要．以下のいずれかでテスト用依存を導入する．
+
+```bash
+# venv を使う場合
+python -m venv .venv
+source .venv/bin/activate          # Windows は .venv/Scripts/activate
+pip install -e ".[dev]"
+
+# pytest だけが必要であれば
+pip install pytest
+```
+
+### `parse_enex.py` の使い方
+
+ENEX ファイルを Markdown へ変換する．
+
+```bash
+python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
+```
+
+出力は 1 ノート 1 ファイルで，フロントマター付き Markdown となる．3 セクション構成（🗒️ 人間メモ／🤖 Evernote AI 構造化情報／🗣️ 生の文字起こし）．ENEX 内の音声 base64 データは出力に含めない．
+
+### テスト
+
+```bash
+pytest -v
+```
+
+合成 fixture（`tests/fixtures/sample.enex`）に基づくユニットテストが回る．Public リポジトリの fixture は個人情報を一切含まない合成データのみ．
+
+### CI
+
+CI は中央 composite action を呼び出す形で Markdown lint（`markdownlint` ・ `textlint` ・ `prh`）を回す．設定を上書きしたい場合は，リポジトリルートに `.markdownlint-cli2.yaml` ・ `.textlintrc.json` ・ `prh.yml` を置く．これらが中央設定より優先される（per-repo override）．Python テストの CI 化はフェーズ 5 で扱う．
 
 ## 🤝 開発に参加する
 
