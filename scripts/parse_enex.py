@@ -356,16 +356,13 @@ def _render_block(elem: ET.Element) -> str:
         prefix = "#" * int(tag[1])
         return f"{prefix} {_render_inline(elem)}".strip()
     if tag == "ul":
-        items = [f"- {_render_inline(li)}" for li in elem.findall("{*}li")]
-        return "\n".join(items)
+        return _render_list(elem, ordered=False, depth=0)
     if tag == "ol":
-        items = [
-            f"{i + 1}. {_render_inline(li)}"
-            for i, li in enumerate(elem.findall("{*}li"))
-        ]
-        return "\n".join(items)
+        return _render_list(elem, ordered=True, depth=0)
     if tag == "blockquote":
-        return f"> {_render_inline(elem)}"
+        rendered = _render_inline(elem)
+        lines = rendered.splitlines() or [rendered]
+        return "\n".join(f"> {line}" if line else ">" for line in lines)
     if tag == "div":
         if any(_local_tag(c.tag).lower() in {"h1", "h2", "h3", "ul", "ol", "blockquote", "div", "p", "hr"} for c in elem):
             return _render_children_as_blocks(elem)
@@ -382,31 +379,74 @@ def _render_inline(elem: ET.Element) -> str:
     if elem.text:
         parts.append(elem.text)
     for child in elem:
-        ctag = _local_tag(child.tag).lower()
-        if ctag in ("b", "strong"):
-            content = _render_inline(child).strip()
-            if content:
-                parts.append(f" **{content}** ")
-        elif ctag in ("i", "em"):
-            content = _render_inline(child).strip()
-            if content:
-                parts.append(f" *{content}* ")
-        elif ctag == "a":
-            href = child.get("href", "")
-            parts.append(f"[{_render_inline(child).strip()}]({href})")
-        elif ctag == "code":
-            content = _render_inline(child).strip()
-            if content:
-                parts.append(f"`{content}`")
-        elif ctag == "br":
-            parts.append("\n")
-        elif ctag == "en-media":
-            pass
-        else:
-            parts.append(_render_inline(child))
+        parts.append(_render_inline_child_chunk(child))
         if child.tail:
             parts.append(child.tail)
     return _normalize_emphasis_spacing("".join(parts))
+
+
+def _render_inline_child_chunk(child: ET.Element) -> str:
+    """インライン子要素 1 つを Markdown 文字列へ変換する．"""
+    ctag = _local_tag(child.tag).lower()
+    if ctag in ("b", "strong"):
+        content = _render_inline(child).strip()
+        return f" **{content}** " if content else ""
+    if ctag in ("i", "em"):
+        content = _render_inline(child).strip()
+        return f" *{content}* " if content else ""
+    if ctag == "a":
+        href = child.get("href", "")
+        content = (
+            _render_inline(child)
+            .strip()
+            .replace("[", "\\[")
+            .replace("]", "\\]")
+        )
+        return f"[{content}]({href})"
+    if ctag == "code":
+        content = _render_inline(child).strip()
+        if not content:
+            return ""
+        if "`" in content:
+            return f"`` {content} ``"
+        return f"`{content}`"
+    if ctag == "br":
+        return "  \n"
+    if ctag == "en-media":
+        return ""
+    return _render_inline(child)
+
+
+def _render_list(elem: ET.Element, *, ordered: bool, depth: int) -> str:
+    """ul / ol を Markdown のリストへ変換する．ネストリストはインデントで表現する．"""
+    indent = "  " * depth
+    lines: list[str] = []
+    for i, li in enumerate(elem.findall("{*}li")):
+        marker = f"{i + 1}." if ordered else "-"
+        lines.append(f"{indent}{marker} {_render_list_item(li, depth)}")
+    return "\n".join(lines)
+
+
+def _render_list_item(li: ET.Element, depth: int) -> str:
+    """li をレンダリングする．子要素に ul / ol があれば再帰的にネスト処理する．"""
+    inline_buf: list[str] = []
+    nested: list[str] = []
+    if li.text:
+        inline_buf.append(li.text)
+    for child in li:
+        ctag = _local_tag(child.tag).lower()
+        if ctag in ("ul", "ol"):
+            nested.append(
+                _render_list(child, ordered=(ctag == "ol"), depth=depth + 1)
+            )
+        else:
+            inline_buf.append(_render_inline_child_chunk(child))
+        if child.tail:
+            inline_buf.append(child.tail)
+    head = _normalize_emphasis_spacing("".join(inline_buf)).strip()
+    if nested:
+        return head + "\n" + "\n".join(nested)
+    return head
 
 
 def _normalize_emphasis_spacing(s: str) -> str:

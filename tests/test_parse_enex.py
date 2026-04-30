@@ -301,6 +301,40 @@ def test_enml_bold_no_space_before_half_width_punctuation() -> None:
     assert "**bar**!" in out
 
 
+def test_enml_nested_list_rendered_with_indentation() -> None:
+    enml = "<ul><li>top<ul><li>child1</li><li>child2</li></ul></li><li>top2</li></ul>"
+    out = enml_to_markdown(enml)
+    assert "- top" in out
+    assert "  - child1" in out
+    assert "  - child2" in out
+    assert "- top2" in out
+
+
+def test_enml_blockquote_multiline_each_prefixed() -> None:
+    enml = "<blockquote>line1<br/>line2</blockquote>"
+    out = enml_to_markdown(enml)
+    assert "> line1" in out
+    assert "> line2" in out
+
+
+def test_enml_link_text_escapes_brackets() -> None:
+    enml = '<p><a href="https://example.com/x">[label]</a></p>'
+    out = enml_to_markdown(enml)
+    assert "[\\[label\\]](https://example.com/x)" in out
+
+
+def test_enml_inline_code_with_backtick_uses_double_backticks() -> None:
+    enml = "<p><code>has `tick`</code></p>"
+    out = enml_to_markdown(enml)
+    assert "`` has `tick` ``" in out
+
+
+def test_enml_br_outputs_two_space_newline() -> None:
+    enml = "<p>foo<br/>bar</p>"
+    out = enml_to_markdown(enml)
+    assert "foo  \nbar" in out
+
+
 # ---------- sanitize_filename ----------
 
 
