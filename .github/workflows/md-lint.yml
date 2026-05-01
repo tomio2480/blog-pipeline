@@ -4,15 +4,15 @@ name: Markdown Lint
 # 以下 2 箇所のみ利用者が書き換える：
 #   - `OWNER` を利用する github-workflows のオーナー名に置き換える．
 #     （tomio2480 を直接利用するなら OWNER → tomio2480．自分でフォークした場合は自分のユーザー名）
-#   - `@8382b97a883560c5e05dbd862babd1c8fc8d8994` を利用したい github-workflows のコミット SHA に置き換える．
+#   - `@<SHA>` を利用したい github-workflows のコミット SHA に置き換える．
 #
 # 参照先（@ 以降）の選び方：
-#   - 既定: `@8382b97a883560c5e05dbd862babd1c8fc8d8994 # v2` 形式で SHA pin とバージョンコメントを併記する．
+#   - 既定: `@<SHA> # v2` 形式で SHA pin とバージョンコメントを併記する．
 #     Dependabot が SHA とバージョンの両方を自動追随し，更新は PR で通知される．
 #     本テンプレはこの方式を推奨．
 #   - 代替 1: `@main` — 中央の最新 commit を即時反映．Dependabot による更新検知は働かない．
 #     中央 repo の書き換えが即時反映される点に同意できる場合のみ．
-#   - 代替 2: `@8382b97a883560c5e05dbd862babd1c8fc8d8994 # v2.0.0` 形式 — 完全不変．パッチ追随も止めて固定したい場合．
+#   - 代替 2: `@<SHA> # v2.0.0` 形式 — 完全不変．パッチ追随も止めて固定したい場合．
 #
 # v1 系（`@v1` / `@v1.0.0` 等）は self-detection bug により動作しません．
 # 必ず v2 以降を参照してください（詳細は中央 repo の README）．
@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Markdown Lint via composite action
-        uses: tomio2480/github-workflows/.github/actions/markdown-lint@8382b97a883560c5e05dbd862babd1c8fc8d8994 # v2
+        uses: tomio2480/github-workflows/.github/actions/markdown-lint@c9846a9ab03d568599596bb93b08122c449088c3 # v2.2.2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # 必要に応じて inputs で上書き可能．詳細は中央リポジトリの README を参照．
