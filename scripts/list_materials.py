@@ -172,7 +172,7 @@ def list_materials(materials_dir: Path) -> list[dict[str, Any]]:
     for md_path in target_files:
         try:
             text = md_path.read_text(encoding="utf-8")
-        except OSError as e:
+        except (OSError, UnicodeDecodeError) as e:
             _warn(f"{md_path.name} を読み込めませんでした: {e}")
             continue
 
@@ -185,8 +185,14 @@ def list_materials(materials_dir: Path) -> list[dict[str, Any]]:
         summary_path = md_path.parent / f"{md_path.stem}.summary.yml"
         if summary_path.exists():
             summary_data = _load_summary_yaml(summary_path)
-            frontmatter["summary"] = summary_data.get("summary", "")
-            frontmatter["auto_tags"] = summary_data.get("auto_tags", [])
+            if summary_data.get("summary"):
+                frontmatter["summary"] = summary_data["summary"]
+            else:
+                frontmatter.setdefault("summary", "")
+            if summary_data.get("auto_tags"):
+                frontmatter["auto_tags"] = summary_data["auto_tags"]
+            else:
+                frontmatter.setdefault("auto_tags", [])
         else:
             _warn(
                 f"{md_path.stem}.summary.yml が見つかりません．"
@@ -218,12 +224,13 @@ def format_table(items: list[dict[str, Any]]) -> str:
     lines = [header, separator]
 
     for item in items:
-        note_title = str(item.get("note_title", ""))
+        note_title = str(item.get("note_title", ""))[:40]
         tags_raw = item.get("tags", [])
         if isinstance(tags_raw, list):
             tags_str = ", ".join(str(t) for t in tags_raw)
         else:
             tags_str = str(tags_raw)
+        tags_str = tags_str[:30]
         summary_raw = str(item.get("summary", ""))
         summary_short = summary_raw[:30]
 

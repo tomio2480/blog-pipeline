@@ -180,3 +180,107 @@ def test_readme_md_is_excluded(tmp_path: Path) -> None:
 
     assert len(result) == 1
     assert result[0]["note_title"] == "別のノート"
+
+
+# ---------- B-2: UnicodeDecodeError 対応テスト ----------
+
+
+def test_invalid_utf8_file_is_skipped_with_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """不正な UTF-8 バイト列を含む .md ファイルはスキップされ warning が出る（B-2）．
+    同ディレクトリの正常ファイルは影響を受けない．
+    """
+    # 不正な UTF-8 バイト列（0xFF 0xFE はシーケンスとして不正）を書き込む
+    invalid_path = tmp_path / "broken.md"
+    invalid_path.write_bytes(b"---\nnote_title: test\n---\n\xff\xfe invalid utf8")
+
+    # 正常なファイルも置く
+    _write_md(tmp_path, "valid.md", MINIMAL_FRONTMATTER_2)
+
+    result = list_materials(tmp_path)
+
+    # 正常ファイルは返る
+    assert len(result) == 1
+    assert result[0]["note_title"] == "別のノート"
+
+    # stderr に warning が出る
+    captured = capsys.readouterr()
+    assert "warning" in captured.err.lower() or "Warning" in captured.err
+
+
+# ---------- B-3: サイドカー空値の一貫性テスト ----------
+
+
+def test_sidecar_empty_values_preserve_existing_frontmatter(
+    tmp_path: Path,
+) -> None:
+    """サイドカーに summary: "" と auto_tags: [] が入っているとき，
+    frontmatter の既存 summary / tags が保持される（B-3）．
+    """
+    frontmatter_with_summary = """\
+---
+source: evernote
+note_title: "サマリー付きノート"
+created: "2026-04-28T09:49:31Z"
+updated: "2026-04-28T10:11:33Z"
+author: "alice"
+tags:
+  - 既存タグA
+  - 既存タグB
+summary: "既存のサマリーテキスト"
+---
+
+本文
+"""
+    # サイドカーに空値を入れる（note-tagger が未実行の想定）
+    empty_sidecar = """\
+summary: ""
+auto_tags:
+"""
+    _write_md(tmp_path, "note.md", frontmatter_with_summary)
+    _write_summary(tmp_path, "note", empty_sidecar)
+
+    result = list_materials(tmp_path)
+
+    assert len(result) == 1
+    item = result[0]
+    # 空値のサイドカーで frontmatter の既存 summary が上書きされないこと
+    assert item["summary"] == "既存のサマリーテキスト"
+    # 空値のサイドカーで frontmatter の既存 tags が保持されること
+    assert item["tags"] == ["既存タグA", "既存タグB"]
+    # サイドカーの auto_tags が空のとき auto_tags は空配列にフォールバックすること
+    assert item["auto_tags"] == []
+
+
+# ---------- B-4: format_table truncate テスト ----------
+
+
+def test_format_table_truncates_long_note_title(tmp_path: Path) -> None:
+    """note_title が 50 字のとき，table 出力のデータ行が 40 字＋スペース＋tags 30 字以内＋スペース＋summary という幅に収まる（B-4）．"""
+    long_title_frontmatter = """\
+---
+source: evernote
+note_title: "12345678901234567890123456789012345678901234567890"
+created: "2026-04-28T09:49:31Z"
+updated: "2026-04-28T10:11:33Z"
+author: "alice"
+tags: ["tagA"]
+---
+
+本文
+"""
+    _write_md(tmp_path, "note.md", long_title_frontmatter)
+    _write_summary(tmp_path, "note", SUMMARY_YAML)
+
+    result = list_materials(tmp_path)
+    output = format_table(result)
+
+    lines = output.splitlines()
+    # ヘッダー行・セパレーター行を除いた最初のデータ行を確認
+    data_line = lines[2]
+    # note_title 列（先頭 40 字幅）の後ろはスペース区切りであること
+    # つまり data_line[40] はスペースでなければならない（41 字目が切り詰め後の境界）
+    assert data_line[40] == " ", (
+        f"41 字目がスペースでない（note_title が切り詰められていない）: {data_line!r}"
+    )
