@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export SYSTEM "http://xml.evernote.com/pub/evernote-export4.dtd">
+<en-export export-date="20260501T090000Z" application="Evernote" version="10.0">
+  <note>
+    <title>2026-03-10-架空テックカンファレンス登壇メモ</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note>
+<en-media style="--en-transcription:{&quot;version&quot;:1,&quot;languages&quot;:[&quot;ja&quot;],&quot;transcription_state&quot;:&quot;transcribed&quot;,&quot;segments&quot;:[{&quot;start_time&quot;:0,&quot;end_time&quot;:4,&quot;text&quot;:&quot;本日はご参加いただきありがとうございます&quot;},{&quot;start_time&quot;:4,&quot;end_time&quot;:9,&quot;text&quot;:&quot;架空のフレームワークについて発表します&quot;},{&quot;start_time&quot;:9,&quot;end_time&quot;:15,&quot;text&quot;:&quot;実装の詳細はスライドをご覧ください&quot;}]};" hash="aaa1111111111111111111111111111a" type="audio/mp4"/>
+<div><a href="https://example.com/conf-2026">カンファレンスページ</a></div>
+<div><a href="https://example.com/slides-2026">発表スライド</a></div>
+<h1>登壇テーマ：架空フレームワーク入門</h1>
+<h2>背景と動機</h2>
+<p>このセッションでは <b>架空のフレームワーク</b> の設計思想を紹介します．</p>
+<h2>実装のポイント</h2>
+<ul>
+<li>ストリーミング処理の採用</li>
+<li>メモリ効率を重視した設計</li>
+<li>標準ライブラリのみで実装</li>
+</ul>
+<h3>サンプルコード解説</h3>
+<blockquote>シンプルさを保ちながら拡張性を確保する</blockquote>
+<p><a href="https://example.com/repo">サンプルリポジトリ</a></p>
+</en-note>]]></content>
+    <created>20260310T093000Z</created>
+    <updated>20260310T110000Z</updated>
+    <tag>登壇</tag>
+    <tag>カンファレンス</tag>
+    <note-attributes>
+      <author>speaker-a</author>
+    </note-attributes>
+    <resource>
+      <data encoding="base64">AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZHSElKS0xNTk9QUVJTVFVWV1hZWltcXV5fYGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn8=</data>
+      <mime>audio/mp4</mime>
+      <resource-attributes>
+        <file-name>conf-recording.m4a</file-name>
+      </resource-attributes>
+    </resource>
+  </note>
+  <note>
+    <title>2026-04-05-架空OSSプロジェクトへの貢献メモ</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note>
+<en-media style="--en-transcription:{&quot;version&quot;:1,&quot;languages&quot;:[&quot;ja&quot;],&quot;transcription_state&quot;:&quot;transcribed&quot;,&quot;segments&quot;:[{&quot;start_time&quot;:0,&quot;end_time&quot;:5,&quot;text&quot;:&quot;プルリクエストをレビューしてもらいました&quot;},{&quot;start_time&quot;:5,&quot;end_time&quot;:12,&quot;text&quot;:&quot;ドキュメントの改善提案を取り込んでいただきました&quot;}]};" hash="bbb2222222222222222222222222222b" type="audio/mp4"/>
+<div><a href="https://example.com/oss-project">OSSプロジェクトページ</a></div>
+<h1>貢献の概要：ドキュメント改善</h1>
+<h2>対象プロジェクト</h2>
+<p>架空の OSS プロジェクトに <b>ドキュメント改善</b> の PR を送りました．</p>
+<h2>変更内容</h2>
+<ul>
+<li>README の構成を整理</li>
+<li>使用例のサンプルコードを追加</li>
+</ul>
+<h2>学んだこと</h2>
+<blockquote>コードよりドキュメントが難しい場合がある</blockquote>
+<p><a href="https://example.com/oss-pr">マージされた PR</a></p>
+</en-note>]]></content>
+    <created>20260405T140000Z</created>
+    <updated>20260406T092000Z</updated>
+    <tag>OSS</tag>
+    <tag>技術書</tag>
+    <note-attributes>
+      <author>contributor-b</author>
+    </note-attributes>
+    <resource>
+      <data encoding="base64">AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJygpKissLS4vMDEyMzQ1Njc4OTo7PD0+P0BBQkNERUZH</data>
+      <mime>audio/mp4</mime>
+      <resource-attributes>
+        <file-name>oss-memo.m4a</file-name>
+      </resource-attributes>
+    </resource>
+  </note>
+  <note>
+    <title>2026-04-20-架空地域コミュニティ運営振り返り</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note>
+<en-media style="--en-transcription:{&quot;version&quot;:1,&quot;languages&quot;:[&quot;ja&quot;],&quot;transcription_state&quot;:&quot;transcribed&quot;,&quot;segments&quot;:[{&quot;start_time&quot;:0,&quot;end_time&quot;:6,&quot;text&quot;:&quot;今月の勉強会には十五名が参加しました&quot;},{&quot;start_time&quot;:6,&quot;end_time&quot;:11,&quot;text&quot;:&quot;次回は来月末に開催する予定です&quot;}]};" hash="ccc3333333333333333333333333333c" type="audio/mp4"/>
+<div><a href="https://example.com/community">コミュニティサイト</a></div>
+<div><a href="https://example.com/community-report">活動レポート</a></div>
+<h1>コミュニティ運営：今月の振り返り</h1>
+<h2>開催した勉強会</h2>
+<p><b>架空の地域勉強会</b> を今月も無事に開催できました．</p>
+<h2>参加者フィードバック</h2>
+<ul>
+<li>初心者向けのセッションを増やしてほしい</li>
+<li>オンライン参加の選択肢があると良い</li>
+<li>懇親会の時間をもっと長くしてほしい</li>
+</ul>
+<h3>次回への改善点</h3>
+<blockquote>小さく続けることが長期的な成果につながる</blockquote>
+<p><a href="https://example.com/community-next">次回開催情報</a></p>
+</en-note>]]></content>
+    <created>20260420T180000Z</created>
+    <updated>20260421T100000Z</updated>
+    <tag>コミュニティ</tag>
+    <tag>地域</tag>
+    <note-attributes>
+      <author>organizer-c</author>
+    </note-attributes>
+    <resource>
+      <data encoding="base64">AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8gISIjJCUmJw==</data>
+      <mime>audio/mp4</mime>
+      <resource-attributes>
+        <file-name>community-memo.m4a</file-name>
+      </resource-attributes>
+    </resource>
+  </note>
+</en-export>
