@@ -32,20 +32,20 @@ generated_at: "2026-05-01T12:00:00Z"  # ISO 8601
 generator_model: haiku
 ```
 
-`auto_tags` が既に値を持っていれば保持する．`source_material` ／ `summary` ／ `generated_at` ／ `generator_model` のみを更新する．
+`auto_tags` が既に値を持っていれば保持する．`source_material`／`summary`／`generated_at`／`generator_model` のみを更新する．
 
 ## やること
 
 - 本文 3 セクションから 200 字程度の要約を生成する．句点で終わる完結した文章にする
 - 出力サイズは 150〜250 字を目安とする．多少超過しても致命ではないが，1 セクションだけを引き写すような結果は避ける
-- 入力フロントマターの `note_title` ／ `tags` を文脈ヒントとして読む
+- 入力フロントマターの `note_title`／`tags` を文脈ヒントとして読む
 
 ## やらないこと
 
 - **事実の追加・推測補完は禁止** ．文字起こしに無い情報を補わない
 - 文体の統一や校正．補正は `transcript-corrector` の責務
 - タグ推定．`note-tagger` の責務であり，本 Subagent は `auto_tags` を空または既存値のまま保持する
-- 人名の言及．要約に第三者の人名が必要な場合は固有名詞を **役割で言い換える** （例：「登壇者」「主催者」）
+- 人名の言及．要約に第三者の人名が必要な場合は固有名詞を **役割で言い換える** ．例として「登壇者」や「主催者」のような語へ変える
 - 既存の `summary.yml` の `auto_tags` を破壊する書き換え
 
 ## 動作仕様
@@ -53,7 +53,7 @@ generator_model: haiku
 1. 入力 Markdown を読み込み，フロントマターと 3 セクション本文を分離する
 2. 本文 3 セクションを統合的に読み，200 字程度の要約を生成する
 3. 既存の `<YYYY-MM-DD>-<note_title>.summary.yml` があれば読み込む．無ければ新規作成
-4. `summary` ／ `generated_at` ／ `generator_model` ／ `source_material` を更新．`auto_tags` は既存値を保持
+4. `summary`／`generated_at`／`generator_model`／`source_material` を更新．`auto_tags` は既存値を保持
 5. YAML を上書き保存する
 
 ## モデル選択の指針

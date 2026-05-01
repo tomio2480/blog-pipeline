@@ -34,7 +34,7 @@ generated_at: "2026-05-01T12:00:00Z"
 generator_model: haiku
 ```
 
-`summary` が既に値を持っていれば保持する．`source_material` ／ `auto_tags` ／ `generated_at` ／ `generator_model` のみを更新する．
+`summary` が既に値を持っていれば保持する．`source_material`／`auto_tags`／`generated_at`／`generator_model` のみを更新する．
 
 ## やること
 
@@ -55,7 +55,7 @@ generator_model: haiku
 1. 入力 Markdown を読み込み，フロントマターと 3 セクション本文を分離する
 2. フロントマター `tags` を初期セットとして読み，本文から追加候補を抽出
 3. 既存の `<YYYY-MM-DD>-<note_title>.summary.yml` があれば読み込む．無ければ新規作成
-4. `auto_tags` ／ `generated_at` ／ `generator_model` ／ `source_material` を更新．`summary` は既存値を保持
+4. `auto_tags`／`generated_at`／`generator_model`／`source_material` を更新．`summary` は既存値を保持
 5. YAML を上書き保存する
 
 ## モデル選択の指針
@@ -66,7 +66,7 @@ generator_model: haiku
 
 ## 利用者がカスタマイズする箇所
 
-- `vocabulary.yml` の `organizations` ／ `places` を優先度高くタグ化する処理
+- `vocabulary.yml` の `organizations`／`places` を優先度高くタグ化する処理
 - 個別ドメインのタグ優先度（地域コミュニティ名・カンファレンス名）
 - 人名タグの追加禁止を Private 側で再強調する記述
 
