@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
       - name: Markdown Lint via composite action
-        uses: tomio2480/github-workflows/.github/actions/markdown-lint@c9846a9ab03d568599596bb93b08122c449088c3 # v2.2.2
+        uses: tomio2480/github-workflows/.github/actions/markdown-lint@185a9045a87bafb667de89339b3fba24044a1cdc # v2.3.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # 必要に応じて inputs で上書き可能．詳細は中央リポジトリの README を参照．

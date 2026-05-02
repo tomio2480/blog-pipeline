@@ -563,3 +563,106 @@ def test_iso_datetime_format(tmp_path: Path) -> None:
     note = next(parse_enex(path))
     assert note.created == "2026-01-01T00:00:00Z"
     assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$", note.created)
+
+
+# ---------- multi-note: tests/fixtures/multi-note-sample.enex ----------
+
+
+@pytest.fixture
+def multi_notes() -> list[Note]:
+    notes = list(parse_enex(FIXTURES / "multi-note-sample.enex"))
+    return notes
+
+
+def test_multi_note_sample_yields_three_notes(multi_notes: list[Note]) -> None:
+    """multi-note-sample.enex を parse_enex で処理すると 3 件の Note が得られる．"""
+    assert len(multi_notes) == 3
+
+
+def test_multi_note_sample_each_note_has_unique_title(multi_notes: list[Note]) -> None:
+    """3 件の note の title が全て異なる．"""
+    titles = [note.title for note in multi_notes]
+    assert len(set(titles)) == 3
+
+
+def test_multi_note_sample_titles_have_date_prefix(multi_notes: list[Note]) -> None:
+    """各 note の title が YYYY-MM-DD- 形式のプレフィックスを持つ．"""
+    date_prefix_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}-")
+    for note in multi_notes:
+        assert date_prefix_pattern.match(note.title), (
+            f"title にデートプレフィックスがない: {note.title!r}"
+        )
+
+
+def test_multi_note_sample_tags_vary_across_notes(multi_notes: list[Note]) -> None:
+    """3 件の note がそれぞれ異なるタグ分布を持つ（タグセットが全て同一にならない）．"""
+    tag_sets = [frozenset(note.tags) for note in multi_notes]
+    # 少なくとも 2 種類以上の異なるタグセットが存在する
+    assert len(set(tag_sets)) >= 2
+
+
+def test_multi_note_sample_all_notes_have_transcription(multi_notes: list[Note]) -> None:
+    """全 note が文字起こし済み（transcription_state == 'transcribed'）である．"""
+    for note in multi_notes:
+        assert note.transcription_state == "transcribed", (
+            f"note {note.title!r} の transcription_state が 'transcribed' でない"
+        )
+        assert note.raw_transcription != ""
+
+
+def test_multi_note_sample_writes_three_markdown_files(tmp_path: Path) -> None:
+    """write_notes で出力ディレクトリに 3 件の Markdown ファイルが書き出される．"""
+    written = write_notes(parse_enex(FIXTURES / "multi-note-sample.enex"), tmp_path)
+    assert len(written) == 3
+    for path in written:
+        assert path.exists()
+        assert path.suffix == ".md"
+        content = path.read_text(encoding="utf-8")
+        assert content.startswith("---\n")
+
+
+def test_multi_note_sample_iterparse_does_not_load_full_xml() -> None:
+    """parse_enex がジェネレータとして動作し，next() で 1 件ずつ yield できる．
+
+    iterparse 採用の回帰確認として，next() で最初の 1 件のみ取り出し，
+    それが有効な Note であることを確認する．
+    """
+    gen = parse_enex(FIXTURES / "multi-note-sample.enex")
+    first = next(gen)
+    assert isinstance(first, Note)
+    assert first.title != ""
+    # 2 件目，3 件目も yield できる
+    second = next(gen)
+    assert isinstance(second, Note)
+    third = next(gen)
+    assert isinstance(third, Note)
+    # 4 件目は StopIteration になる
+    with pytest.raises(StopIteration):
+        next(gen)
+
+
+def test_multi_note_sample_note1_tags(multi_notes: list[Note]) -> None:
+    """1 件目（登壇テーマ）のタグが「登壇」「カンファレンス」を含む．"""
+    note1 = multi_notes[0]
+    assert "登壇" in note1.tags
+    assert "カンファレンス" in note1.tags
+
+
+def test_multi_note_sample_note2_tags(multi_notes: list[Note]) -> None:
+    """2 件目（OSS 貢献）のタグが「OSS」「技術書」を含む．"""
+    note2 = multi_notes[1]
+    assert "OSS" in note2.tags
+    assert "技術書" in note2.tags
+
+
+def test_multi_note_sample_note3_tags(multi_notes: list[Note]) -> None:
+    """3 件目（コミュニティ運営）のタグが「コミュニティ」「地域」を含む．"""
+    note3 = multi_notes[2]
+    assert "コミュニティ" in note3.tags
+    assert "地域" in note3.tags
+
+
+def test_multi_note_sample_created_dates_differ(multi_notes: list[Note]) -> None:
+    """3 件の note の created 日時が全て異なる．"""
+    created_dates = [note.created for note in multi_notes]
+    assert len(set(created_dates)) == 3
