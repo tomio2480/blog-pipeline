@@ -138,7 +138,8 @@ def _extract_frontmatter(text: str) -> tuple[dict[str, Any], bool]:
     yaml_block = rest[:close_m.start()]
     try:
         parsed = _parse_simple_yaml(yaml_block)
-    except Exception:
+    except (ValueError, TypeError) as e:
+        _warn(f"フロントマターを解析できませんでした: {e}")
         return {}, False
 
     return parsed, True
