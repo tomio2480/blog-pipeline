@@ -67,6 +67,20 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
                 value = raw_val[1:]
             result[key] = value
             i += 1
+        elif raw_val.startswith("["):
+            # インライン配列表記: ["tagA", "tagB"] または [a, b]
+            inner = raw_val.strip("[]")
+            items_inline: list[str] = []
+            for item_raw in inner.split(","):
+                item_val = item_raw.strip()
+                # クォート除去
+                if (item_val.startswith('"') and item_val.endswith('"')) or \
+                   (item_val.startswith("'") and item_val.endswith("'")):
+                    item_val = item_val[1:-1]
+                if item_val:
+                    items_inline.append(item_val)
+            result[key] = items_inline
+            i += 1
         elif raw_val == "" or raw_val.startswith("#"):
             # 値が空 → 次行以降にリストがあるか確認
             items: list[str] = []
@@ -134,11 +148,12 @@ def _extract_frontmatter(text: str) -> tuple[dict[str, Any], bool]:
 
 
 def _load_summary_yaml(path: Path) -> dict[str, Any]:
-    """summary.yml を読み込む．失敗時は例外を上げず空辞書を返す．"""
+    """summary.yml を読み込む．失敗時は警告を出して空辞書を返す．"""
     try:
         text = path.read_text(encoding="utf-8")
         return _parse_simple_yaml(text)
-    except Exception:
+    except (OSError, UnicodeDecodeError) as e:
+        _warn(f"{path.name} を読み込めませんでした: {e}")
         return {}
 
 
@@ -219,7 +234,7 @@ def format_table(items: list[dict[str, Any]]) -> str:
 
     列: note_title / tags / summary（先頭 30 字）
     """
-    header = f"{'note_title':<40} {'tags':<30} {'summary'}"
+    header = f"{'note_title':<40} {'tags':<30} {'summary':<30}"
     separator = "-" * (40 + 1 + 30 + 1 + 30)
     lines = [header, separator]
 
@@ -234,7 +249,7 @@ def format_table(items: list[dict[str, Any]]) -> str:
         summary_raw = str(item.get("summary", ""))
         summary_short = summary_raw[:30]
 
-        lines.append(f"{note_title:<40} {tags_str:<30} {summary_short}")
+        lines.append(f"{note_title:<40} {tags_str:<30} {summary_short:<30}")
 
     return "\n".join(lines)
 
@@ -259,9 +274,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    if not args.materials_dir.exists():
+    if not args.materials_dir.is_dir():
         print(
-            f"ディレクトリが見つかりません: {args.materials_dir}",
+            f"存在しないかディレクトリではありません: {args.materials_dir}",
             file=sys.stderr,
         )
         return 2

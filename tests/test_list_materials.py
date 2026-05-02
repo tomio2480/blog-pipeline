@@ -284,3 +284,83 @@ tags: ["tagA"]
     assert data_line[40] == " ", (
         f"41 字目がスペースでない（note_title が切り詰められていない）: {data_line!r}"
     )
+
+
+# ---------- 新規 5 件（レビュー指摘反映）----------
+
+
+def test_load_summary_yaml_invalid_yaml_returns_empty_with_warning(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """_load_summary_yaml が OSError / UnicodeDecodeError のとき空辞書を返し warning を出す．"""
+    from list_materials import _load_summary_yaml
+
+    invalid_path = tmp_path / "broken.summary.yml"
+    invalid_path.write_bytes(b"\xff\xfe broken utf8 content")
+
+    result = _load_summary_yaml(invalid_path)
+
+    assert result == {}
+    captured = capsys.readouterr()
+    assert "Warning" in captured.err or "warning" in captured.err.lower()
+
+
+def test_format_table_header_has_summary_column_padding(tmp_path: Path) -> None:
+    """format_table ヘッダー行の幅が note_title(40)+1+tags(30)+1+summary(30)=102 文字に揃う．"""
+    _write_md(tmp_path, "note.md", MINIMAL_FRONTMATTER)
+    _write_summary(tmp_path, "note", SUMMARY_YAML)
+
+    result = list_materials(tmp_path)
+    output = format_table(result)
+
+    header = output.splitlines()[0]
+    assert len(header) == 102, (
+        f"ヘッダー長が 102 でない: {len(header)!r}, header={header!r}"
+    )
+
+
+def test_format_table_data_row_summary_padding(tmp_path: Path) -> None:
+    """summary が 10 字以下の短い場合でも，データ行の summary 列が :<30 でパディングされる．"""
+    short_summary_sidecar = """\
+summary: "短い"
+auto_tags:
+  - x
+"""
+    _write_md(tmp_path, "note.md", MINIMAL_FRONTMATTER)
+    _write_summary(tmp_path, "note", short_summary_sidecar)
+
+    result = list_materials(tmp_path)
+    output = format_table(result)
+
+    data_line = output.splitlines()[2]
+    # note_title(40) + space(1) + tags(30) + space(1) = 72 文字目から summary 開始
+    # summary 列も :<30 でパディングされると全体が 102 文字になる
+    assert len(data_line) == 102, (
+        f"データ行長が 102 でない: {len(data_line)!r}, line={data_line!r}"
+    )
+
+
+def test_inline_yaml_list_in_frontmatter_parses_as_list(tmp_path: Path) -> None:
+    """tags: ["a","b"] のインライン配列表記がリストとしてパースされる．"""
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'tags: ["tagA", "tagB"]'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ["tagA", "tagB"], (
+        f"インライン配列がリストにならなかった: {result['tags']!r}"
+    )
+
+
+def test_main_returns_2_when_path_is_file_not_dir(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """通常ファイルを引数に渡したとき exit code 2 + エラーメッセージを返す．"""
+    file_path = tmp_path / "not_a_dir.md"
+    file_path.write_text("content", encoding="utf-8")
+
+    exit_code = main([str(file_path)])
+
+    assert exit_code == 2
+    captured = capsys.readouterr()
+    assert captured.err != ""
