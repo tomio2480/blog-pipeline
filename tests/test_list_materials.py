@@ -372,12 +372,12 @@ def test_main_returns_2_when_path_is_file_not_dir(
     assert captured.err != ""
 
 
-def test_extract_frontmatter_warns_when_parser_raises_value_error(
+def test_extract_frontmatter_returns_false_when_parser_raises_value_error(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     """_parse_simple_yaml が ValueError を投げたとき，
-    _extract_frontmatter は (空辞書, False) を返し warning を stderr に出す．
-    KeyboardInterrupt や SystemExit のような終了系例外は捕捉しない（範囲限定）．
+    _extract_frontmatter は (空辞書, False) を返す．
+    warning は呼び出し側 list_materials が出すため本関数からは出さない．
     """
     def _raise_value_error(_text: str) -> dict[str, object]:
         raise ValueError("simulated parse error")
@@ -391,8 +391,7 @@ def test_extract_frontmatter_warns_when_parser_raises_value_error(
     assert ok is False
 
     captured = capsys.readouterr()
-    assert "フロントマターを解析できませんでした" in captured.err
-    assert "simulated parse error" in captured.err
+    assert captured.err == ""
 
 
 def test_extract_frontmatter_does_not_swallow_keyboard_interrupt(
