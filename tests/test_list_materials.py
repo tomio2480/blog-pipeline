@@ -12,7 +12,13 @@ from pathlib import Path
 
 import pytest
 
-from list_materials import list_materials, format_json, format_table, main
+from list_materials import (
+    _extract_frontmatter,
+    format_json,
+    format_table,
+    list_materials,
+    main,
+)
 
 
 MINIMAL_FRONTMATTER = """\
@@ -364,3 +370,41 @@ def test_main_returns_2_when_path_is_file_not_dir(
     assert exit_code == 2
     captured = capsys.readouterr()
     assert captured.err != ""
+
+
+def test_extract_frontmatter_returns_false_when_parser_raises_value_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """_parse_simple_yaml が ValueError を投げたとき，
+    _extract_frontmatter は (空辞書, False) を返す．
+    warning は呼び出し側 list_materials が出すため本関数からは出さない．
+    """
+    def _raise_value_error(_text: str) -> dict[str, object]:
+        raise ValueError("simulated parse error")
+
+    monkeypatch.setattr("list_materials._parse_simple_yaml", _raise_value_error)
+
+    text = "---\nfoo: bar\n---\n\n本文\n"
+    parsed, ok = _extract_frontmatter(text)
+
+    assert parsed == {}
+    assert ok is False
+
+    captured = capsys.readouterr()
+    assert captured.err == ""
+
+
+def test_extract_frontmatter_does_not_swallow_keyboard_interrupt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """終了系例外（KeyboardInterrupt）は捕捉せず伝播する．
+    except (ValueError, TypeError) に絞った効果を確認．
+    """
+    def _raise_keyboard_interrupt(_text: str) -> dict[str, object]:
+        raise KeyboardInterrupt("simulated interrupt")
+
+    monkeypatch.setattr("list_materials._parse_simple_yaml", _raise_keyboard_interrupt)
+
+    text = "---\nfoo: bar\n---\n\n本文\n"
+    with pytest.raises(KeyboardInterrupt):
+        _extract_frontmatter(text)
