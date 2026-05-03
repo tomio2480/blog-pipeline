@@ -38,16 +38,16 @@
 
 ## 🛤️ 実装フェーズと現状
 
-実装は 0 から 5 までの 6 フェーズで進める．フェーズ 0 はクローズ済みで，現在はフェーズ 1（取り込み補助スクリプトと文字起こし校正）に着手している．各フェーズの進捗は GitHub Issue（`phase-N` ラベル）で追跡する．
+実装は 0 から 5 までの 6 フェーズで進める．フェーズ 0〜3 はクローズ済みである．各フェーズの進捗は GitHub Issue（`phase-N` ラベル）で追跡する．
 
 表 2 フェーズと主な成果物
 
 | フェーズ | 主な成果物 | 状態 |
 |---|---|---|
 | 0 | リポジトリ作成と初期構造，CLAUDE.md，ARCHITECTURE.md | 完了 |
-| 1 | `parse_enex.py`，`agent-templates/transcript-corrector.md` | 実装中 |
-| 2 | `note-summarizer`，`note-tagger`，`list_materials.py`，`propose-articles` | 未着手 |
-| 3 | `article-proposer`，`article-drafter`，`structure-note`，`writing-style` ひな形 | 未着手 |
+| 1 | `parse_enex.py`，`agent-templates/transcript-corrector.md` | 完了 |
+| 2 | `note-summarizer`，`note-tagger`，`list_materials.py`，`propose-articles` | 完了 |
+| 3 | `article-proposer`，`article-drafter`，`structure-note`，`writing-style` ひな形 | 完了 |
 | 4 | `.textlintrc.json`，`prh.yml`，`.markdownlint-cli2.yaml`，`draft-reviewer`，`review-draft`，`publish.py` | 未着手 |
 | 5 | `build_dictionary.py`，月次運用ドキュメント，CI ・ Skill チューニング | 未着手 |
 
