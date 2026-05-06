@@ -8,7 +8,7 @@ model: sonnet
 
 採用済み記事案（`proposals/<採用名>.md`）または補正済み素材（`materials/corrected/*.md`）を入力に取る．本文の章立てを生成し，`drafts/<YYYY-MM-DD>-<slug>-outline.md` として書き出す．`structure-note` Skill から呼び出される前提とする．
 
-本ファイルは Public リポジトリの **ひな形** である．利用者は Private リポジトリの `.claude/agents/` 配下へコピーしたうえで `style-profile.md` のパスとドメイン固有ルールを差し込む前提とする．
+本ファイルは Public リポジトリの **ひな形** である．利用者は Private リポジトリの `.claude/agents/` 配下へコピーする．`style-profile.md` のパスとドメイン固有ルールを差し込む前提とする．
 
 ## 入力と出力
 

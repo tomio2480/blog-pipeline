@@ -5,9 +5,9 @@ description: style-profile.md を参照して生成した本文ドラフトに�
 
 # writing-style
 
-執筆者の過去記事から抽出した文体プロファイル `style-profile.md` を参照し，生成した本文ドラフトの文体を執筆者に近づけるための規約を定義する Skill である．本 Skill は `structure-note` Skill および `article-drafter` Subagent から参照されることを想定する．
+`style-profile.md` を参照し，本文ドラフトの文体を執筆者に近づける規約を定義する Skill である．本 Skill は `structure-note` Skill および `article-drafter` Subagent から参照される．
 
-本ファイルは Public リポジトリの **ひな形** である．利用者は `style-profile.md` の実体を Private リポジトリ側に置き，個人化版の Skill または Subagent 定義から本ひな形の規約に従って参照する．
+本ファイルは Public リポジトリの **ひな形** である．利用者は `style-profile.md` の実体を Private リポジトリ側に置く．個人化版の Skill または Subagent 定義から本ひな形の規約に従って参照する．
 
 ## 役割
 
@@ -34,7 +34,7 @@ description: style-profile.md を参照して生成した本文ドラフトに�
 
 - `style-profile.md` を **模倣の鋳型として使わない**．文体傾向を掴む程度にとどめ，過去記事の語彙を繰り返さない
 - プラットフォーム差（はてなブログ／note）が `style-profile.md` に記載されている場合は，出力先の媒体に合わせた傾向を優先する
-- 文体制約を強くかけるほど生成文の自然さが下がることがある．参照の強度は Subagent の指示で調整する
+- 文体制約を強くかけるほど生成文の自然さが下がる傾向にある．参照の強度は Subagent の指示で調整する
 
 ## style-profile.md が存在しない場合
 
@@ -44,6 +44,6 @@ description: style-profile.md を参照して生成した本文ドラフトに�
 
 - `style-profile.md` のパス（Private 側の実体ファイルへのパス）
 - 参照する観点の絞り込み（4 観点すべてを参照するか，特定の観点のみ使うか）
-- プラットフォーム差の扱い（はてなブログ優先か note 優先か）
+- プラットフォーム差の優先設定（はてなブログと note のどちらを優先するか）
 
 利用者カスタマイズは Private リポジトリ側の Skill ファイルに記載する．Public 側の本ひな形には個人色を含めない．

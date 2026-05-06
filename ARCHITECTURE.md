@@ -180,7 +180,7 @@ ENEX は 1 ファイルが数百 MB に達することもある．そのため `
 
 #### writing-style Skill の位置づけ
 
-`writing-style` は直接 Subagent を起動しない．`style-profile.md` の参照規約をインターフェース定義として提供し，`article-drafter` などの Subagent がこの規約に従って文体を反映する構造とした．Skill を直接呼び出す利用者には `structure-note` を介した利用を推奨する．
+`writing-style` は直接 Subagent を起動しない．`style-profile.md` の参照規約をインターフェース定義として提供する．`article-drafter` などの Subagent がこの規約に従って文体を反映する設計とした．Skill を直接呼び出す利用者には `structure-note` を介した利用を推奨する．
 
 ## 🔐 取り扱い方針
 

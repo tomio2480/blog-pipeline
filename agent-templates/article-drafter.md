@@ -6,9 +6,9 @@ model: sonnet
 
 # article-drafter
 
-`article-proposer` が生成した章立てファイル（`drafts/<YYYY-MM-DD>-<slug>-outline.md`）と補正済み素材を入力に取る．`style-profile.md` を参照して執筆者の文体を反映した本文ドラフトを生成し，`drafts/<YYYY-MM-DD>-<slug>.md` として書き出す．`structure-note` Skill から人間確認後に呼び出される前提とする．
+`article-proposer` の章立てファイル `drafts/<YYYY-MM-DD>-<slug>-outline.md` と補正済み素材を入力に取る．`style-profile.md` を参照して執筆者の文体を反映した本文ドラフトを生成し，`drafts/<YYYY-MM-DD>-<slug>.md` として書き出す．`structure-note` Skill から人間確認後に呼び出される前提とする．
 
-本ファイルは Public リポジトリの **ひな形** である．利用者は Private リポジトリの `.claude/agents/` 配下へコピーしたうえで `style-profile.md` のパスと文体ルールを差し込む前提とする．
+本ファイルは Public リポジトリの **ひな形** である．利用者は Private リポジトリの `.claude/agents/` 配下へコピーする．`style-profile.md` のパスと文体ルールを差し込む前提とする．
 
 ## 入力と出力
 
