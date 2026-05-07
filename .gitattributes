@@ -1,0 +1,19 @@
+# テキストファイルは LF に統一する．
+* text=auto eol=lf
+
+# 明示的にテキスト扱いするファイル
+*.md   text eol=lf
+*.py   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.sh   text eol=lf
+*.txt  text eol=lf
+
+# バイナリファイル（改行コード変換を行わない）
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.mp4  binary
+*.m4a  binary
+*.enex binary
