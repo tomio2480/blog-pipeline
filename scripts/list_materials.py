@@ -58,13 +58,19 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
         # コメント除去（ # 以降）
         # ただしクォート内の # は除去しない
         if raw_val.startswith('"') or raw_val.startswith("'"):
-            # クォートあり：終了クォートまでを値とする
             quote_char = raw_val[0]
-            end_idx = raw_val.find(quote_char, 1)
-            if end_idx != -1:
-                value: Any = raw_val[1:end_idx]
+            if quote_char == '"':
+                # ダブルクォート：JSON 文字列として解析し \" や \n 等を処理する
+                try:
+                    value: Any
+                    value, _ = json.JSONDecoder().raw_decode(raw_val)
+                except json.JSONDecodeError:
+                    end_idx = raw_val.find(quote_char, 1)
+                    value = raw_val[1:end_idx] if end_idx != -1 else raw_val[1:]
             else:
-                value = raw_val[1:]
+                # シングルクォート：エスケープなしで終了クォートを探す
+                end_idx = raw_val.find(quote_char, 1)
+                value = raw_val[1:end_idx] if end_idx != -1 else raw_val[1:]
             result[key] = value
             i += 1
         elif raw_val.startswith("["):

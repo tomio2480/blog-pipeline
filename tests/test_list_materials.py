@@ -408,3 +408,34 @@ def test_extract_frontmatter_does_not_swallow_keyboard_interrupt(
     text = "---\nfoo: bar\n---\n\n本文\n"
     with pytest.raises(KeyboardInterrupt):
         _extract_frontmatter(text)
+
+
+# ---------- Issue #10: クォート内エスケープ対応 ----------
+
+
+def test_quoted_value_with_escaped_quotes_parses_correctly() -> None:
+    """ダブルクォート内のエスケープ済みクォートが正しく解析される（Issue #10）．
+    summary: "Review of \\"The Book\\"" → 値が 'Review of "The Book"' になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'summary: "Review of \\"The Book\\""'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == 'Review of "The Book"', (
+        f"エスケープ済みクォートが正しく解析されなかった: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_with_backslash_n_parses_correctly() -> None:
+    """ダブルクォート内の \\n エスケープが改行文字として解析される（Issue #10）．
+    summary: "line1\\nline2" → 値が 'line1\\nline2'（改行文字含む）になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'summary: "line1\\nline2"'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == "line1\nline2", (
+        f"\\n エスケープが改行文字にならなかった: {result['summary']!r}"
+    )
