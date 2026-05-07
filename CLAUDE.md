@@ -77,8 +77,8 @@
 
 ## 📑 参照ドキュメント
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) ：全体設計とパイプラインの説明
-- [README.md](README.md) ：リポジトリ概要と利用方法
-- [LICENSE](LICENSE) ：MIT License
+- [ARCHITECTURE.md](ARCHITECTURE.md)：全体設計とパイプラインの説明
+- [README.md](README.md)：リポジトリ概要と利用方法
+- [LICENSE](LICENSE)：MIT License
 
 `~/.claude/skills/` 配下の `github-dev`，`code-quality`，`docs-quality` も状況に応じて参照すること．
