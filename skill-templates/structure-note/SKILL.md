@@ -60,7 +60,7 @@ subagent_type: "article-proposer"
 ```text
 subagent_type: "article-drafter"
 章立て：drafts/<YYYY-MM-DD>-<slug>-outline.md
-素材：[元のファイルパス]
+素材：章立てファイル（outline）の source_materials に記載された各ファイル
 ```
 
 `article-drafter` が `drafts/<YYYY-MM-DD>-<slug>.md` を書き出す．

@@ -6,7 +6,7 @@ model: sonnet
 
 # article-drafter
 
-`article-proposer` の章立て `drafts/<YYYY-MM-DD>-<slug>-outline.md` と補正済み素材を入力に取る．`style-profile.md` を参照して執筆者の文体を反映した本文ドラフトを生成し，`drafts/<YYYY-MM-DD>-<slug>.md` として書き出す．`structure-note` Skill から人間確認後に呼び出される前提とする．
+`article-proposer` の章立て `drafts/<YYYY-MM-DD>-<slug>-outline.md` と補正済み素材を入力に取る．`style-profile.md` を参照して，執筆者の文体を反映した本文ドラフトを生成する．出力先は `drafts/<YYYY-MM-DD>-<slug>.md` とする．`structure-note` Skill から人間確認後に呼び出される前提とする．
 
 本ファイルは Public リポジトリの **ひな形** である．利用者は Private リポジトリの `.claude/agents/` 配下へコピーする．`style-profile.md` のパスと文体ルールを差し込む前提とする．
 
@@ -28,8 +28,8 @@ model: sonnet
 ---
 draft_of: "仮タイトル"
 source_materials:
-  - 2026-04-28-素材A.md
-created: "2026-05-01"
+  - materials/corrected/2026-04-28-素材A.md
+created: "<YYYY-MM-DD>"
 status: draft
 ---
 ```
@@ -58,11 +58,9 @@ status: draft
 
 1. 章立てファイルを読み，フロントマター `outline_for`／`source_materials` と章構成を把握する
 2. 補正済み素材ファイルを読み，章ごとに使える記述を対応付ける
-3. `style-profile.md` の「文末バリエーション」「接続詞の癖」「段落の入り方と締め方」を参照する
+3. `style-profile.md` の「文末バリエーション」「接続詞の癖」「段落の入り方と締め方」を参照する（ファイル不在時は文体反映をスキップし，本文末尾に 1 行通知を追記する）
 4. 各章を本文として展開し，1 つの Markdown ドキュメントにまとめる
-5. フロントマターを付けて `drafts/<YYYY-MM-DD>-<slug>.md` へ書き出す
-
-`slug` は章立てファイル名から `-outline` を除いたステム（例：`2026-05-01-技術コミュニティとの関わり方`）を使う．
+5. フロントマターを付けて `drafts/` へ書き出す（ファイル名は章立てファイル名から `-outline` を除いたものとする）
 
 ## モデル選択の指針
 

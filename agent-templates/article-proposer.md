@@ -29,8 +29,8 @@ model: sonnet
 ---
 outline_for: "仮タイトル"
 source_materials:
-  - 2026-04-28-素材A.md
-created: "2026-05-01"
+  - materials/corrected/2026-04-28-素材A.md
+created: "<YYYY-MM-DD>"
 status: outline
 ---
 ```
@@ -77,7 +77,7 @@ status: outline
 4. 各章に 40〜60 字の要旨を付ける
 5. フロントマターを付けて `drafts/<YYYY-MM-DD>-<slug>-outline.md` へ書き出す
 
-`slug` は仮タイトルから Windows 互換サニタイズ（Unicode NFC 正規化，不正文字をハイフンへ置換，最大 80 文字）を通した文字列とする．
+`slug` は仮タイトルに Windows 互換サニタイズを施した文字列とする．サニタイズ内容は Unicode NFC 正規化・不正文字のハイフン置換・最大 80 文字の切り詰めとする．
 
 ## モデル選択の指針
 
