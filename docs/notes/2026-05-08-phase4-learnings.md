@@ -8,9 +8,9 @@ PR #16 のレビュー対応（CodeQL アラート・Ruff・CodeRabbit 指摘）
 
 ### `get_env` の `or` 演算子による空文字列フォールスルー
 
-**What:** `os.environ.get(key) or env_file_vars.get(key, "")` は，環境変数が
-空文字列 `""` に設定されている場合（ `os.environ.get` は `""` を返すが，
-`""` は falsy）に env_file の値へフォールスルーしてしまう．
+**What:** `os.environ.get(key) or env_file_vars.get(key, "")` は空文字列でフォールスルーする．
+環境変数が `""` のとき，`os.environ.get` は `""` を返す．
+`""` は falsy なため，`or` は env_file の値へフォールスルーしてしまう．
 
 **Why:** Python の `or` 演算子は falsy 値（`""`, `0`, `None` 等）をすべて
 「未設定」と同じように扱うため，意図しない動作になる．
@@ -29,19 +29,16 @@ if value is None:
 
 ### GitHub Advanced Security（GHAS）での CodeQL アラート抑制
 
-**What:** `# lgtm[py/weak-cryptographic-algorithm]` コメントは旧 LGTM.com 向けの
-抑制構文であり，GHAS の CodeQL では効果がない．CodeQL アラートは GitHub の
-Security タブから手動で Dismiss する必要がある．
+**What:** `# lgtm[rule-id]` は旧 LGTM.com 向け構文であり，GHAS の CodeQL では無効である．
+GHAS のインライン抑制には `# codeql[rule-id]` 形式を使う．
 
-**Why:** LGTM.com と GHAS は別インフラ．GHAS には Python 向けのインライン
-抑制構文がない．
+**Why:** LGTM.com と GHAS は別インフラのため，旧構文が効果を持たない．
 
-**How to apply:** GHAS で偽陽性アラートを抑制する場合は Security タブ →
-Code scanning alerts → Dismiss（理由を記入）．PR のブロックが不要なら
-アラートを Dismiss することで次回以降のスキャンで再報告されなくなる．
+**How to apply:** GHAS で偽陽性アラートを抑制するには `# codeql[rule-id]` コメントをコード行に追加する．
+Security タブ → Code scanning alerts → Dismiss は，インライン修正が難しい場合の代替である．
 
-今回の WSSE SHA-1 使用については `# noqa: S324` で Ruff の警告は抑制できたが，
-CodeQL は別途 Dismiss が必要だった（プロトコル仕様で変更不可の旨を記入した）．
+今回の WSSE SHA-1 使用について，`# noqa: S324` で Ruff の警告は抑制できた．
+CodeQL は Security タブから Dismiss した（プロトコル仕様上，変更不可のため）．
 
 ### `urllib.request.urlopen` のデフォルトタイムアウト
 
