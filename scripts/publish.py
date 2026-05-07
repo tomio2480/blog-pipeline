@@ -76,7 +76,9 @@ def load_env_file(path: Path) -> dict[str, str]:
 
 def get_env(key: str, env_file_vars: dict[str, str]) -> str:
     """環境変数を取得する．os.environ を env_file より優先する．"""
-    value = os.environ.get(key) or env_file_vars.get(key, "")
+    value = os.environ.get(key)
+    if value is None:
+        value = env_file_vars.get(key, "")
     if not value:
         print(f"Error: {key} が設定されていません．", file=sys.stderr)
         sys.exit(1)
@@ -212,7 +214,7 @@ def post_draft(
     )
 
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req, timeout=30) as resp:
             response_body = resp.read()
             entry_id = extract_entry_id(response_body)
             if entry_id:
