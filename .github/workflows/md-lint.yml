@@ -36,7 +36,7 @@ jobs:
     steps:
       - name: Checkout
         # actions/checkout v4.3.0
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - name: Markdown Lint via composite action
         uses: tomio2480/github-workflows/.github/actions/markdown-lint@ace7290b2d473b7db5e869e217e999a946584603 # v2.5.9
