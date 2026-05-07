@@ -136,9 +136,9 @@ Skill はオーケストレーション役，Subagent は個別タスクの実�
 | フェーズ | 提供する成果物 | 状態 |
 |---|---|---|
 | 0 | リポジトリ作成と初期構造，CLAUDE.md，ARCHITECTURE.md，md-lint workflow，Dependabot | 完了 |
-| 1 | `parse_enex.py`，`agent-templates/transcript-corrector.md`，`materials/raw/` `materials/corrected/` の運用ガイド | 実装中 |
-| 2 | `agent-templates/note-summarizer.md`，`agent-templates/note-tagger.md`，`list_materials.py`，`skill-templates/propose-articles/` | 未着手 |
-| 3 | `agent-templates/article-proposer.md`，`agent-templates/article-drafter.md`，`skill-templates/structure-note/`，`skill-templates/writing-style/` のひな形 | 未着手 |
+| 1 | `parse_enex.py`，`agent-templates/transcript-corrector.md`，`materials/raw/` `materials/corrected/` の運用ガイド | 完了 |
+| 2 | `agent-templates/note-summarizer.md`，`agent-templates/note-tagger.md`，`list_materials.py`，`skill-templates/propose-articles/` | 完了 |
+| 3 | `agent-templates/article-proposer.md`，`agent-templates/article-drafter.md`，`skill-templates/structure-note/`，`skill-templates/writing-style/` のひな形 | 完了 |
 | 4 | `.textlintrc.json`，`prh.yml`，`.markdownlint-cli2.yaml` の汎用設定，`agent-templates/draft-reviewer.md`，`skill-templates/review-draft/`，`publish.py` | 未着手 |
 | 5 | `build_dictionary.py`，月次運用のドキュメント，CI ・ Skill チューニング | 未着手 |
 
@@ -167,6 +167,20 @@ ENEX は 1 ファイルが数百 MB に達することもある．そのため `
 #### Subagent ひな形
 
 `agent-templates/transcript-corrector.md` は frontmatter 付き Markdown で配置する．モデル指定はエイリアス（`sonnet`／`haiku`）で記述し，世代交代に追随する．利用者は Private リポジトリ側 `.claude/agents/` 配下にコピーし，固有名詞辞書 `vocabulary.yml` のパスとドメイン固有ルールを差し込む前提とする．本ひな形には個人色を含めない．
+
+### フェーズ 3 の実装メモ
+
+#### Subagent の分割方針
+
+モード B を `article-proposer`（章立て）と `article-drafter`（本文ドラフト）の 2 Subagent に分割した．理由は 2 つある．第一に，章立てに対する人間の確認ステップを Skill の流れに明示的に挟めるようにするためである．第二に，章立てと本文生成は判断の性質が異なり（構造判断 vs 文体判断），責務の分離が保守性を高めるためである．
+
+#### 章立てファイルの扱い
+
+`article-proposer` の出力は `drafts/<YYYY-MM-DD>-<slug>-outline.md` に書き出す方式とした．メイン会話のみに返す案もあったが，人間が直接編集してから `article-drafter` に渡せる利点を優先した．`outline.md` は `article-drafter` 実行後に人間が任意で削除できる．
+
+#### writing-style Skill の位置づけ
+
+`writing-style` は直接 Subagent を起動しない．`style-profile.md` の参照規約をインターフェース定義として提供する．`article-drafter` などの Subagent がこの規約に従って文体を反映する設計とした．Skill を直接呼び出す利用者には `structure-note` を介した利用を推奨する．
 
 ## 🔐 取り扱い方針
 
