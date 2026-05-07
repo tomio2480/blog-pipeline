@@ -1,0 +1,14 @@
+node_modules/**
+.git/**
+dist/**
+build/**
+coverage/**
+CHANGELOG.md
+# style-profile-source は利用者がコピーして使う過去記事の表現をそのまま保つため lint 対象外
+style-profile-source/**
+# materials 配下の素材は Evernote 文字起こし由来の表記をそのまま保持する性質のため lint 対象外
+materials/raw/[0-9]*.md
+materials/corrected/[0-9]*.md
+# agent-templates はですます調で書く方針のため textlint 対象外
+# （CLAUDE.md「文体の使い分け」を参照）
+agent-templates/**

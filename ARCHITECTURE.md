@@ -28,12 +28,12 @@
 
 - 自動公開機能は実装しない
 - 多人数執筆や共同編集は対象外
-- Evernote 以外のソース（Notion ・ Obsidian 等）からの取り込みは対象外
+- Evernote 以外のソース（Notion・Obsidian 等）からの取り込みは対象外
 - 商用展開は想定しない
 
 ## 🏛️ 全体パイプライン
 
-執筆者（人間）は録音と Evernote から ENEX を取り出すまでの橋渡し，および公開判断を担当する．それ以外の工程はスクリプトと Claude Code の Subagent ・ Skill で処理する．
+執筆者（人間）は録音と Evernote から ENEX を取り出すまでの橋渡し，および公開判断を担当する．それ以外の工程はスクリプトと Claude Code の Subagent・Skill で処理する．
 
 図 1 全体構成（左が入力，右が出力）
 
@@ -127,7 +127,10 @@ blog-pipeline/
 | 全体方針調整 | Opus 本体 | Opus | 設計判断 |
 | 投稿前の最終確認 | Opus 本体 | Opus | 人間との対話前提 |
 
-Skill はオーケストレーション役，Subagent は個別タスクの実行役とする．たとえば `propose-articles` Skill のなかでは次の流れを書く．利用者の素材ディレクトリ配下のファイルを `note-summarizer` Subagent に並列で渡し，戻った要約をメイン会話の Opus がクラスタリングする．
+Skill はオーケストレーション役，Subagent は個別タスクの実行役とする．
+たとえば `propose-articles` Skill のなかでは次の流れを書く．
+利用者の素材ディレクトリ配下のファイルを `note-summarizer` Subagent に並列で渡す．
+戻った要約をメイン会話の Opus がクラスタリングする．
 
 ## 🛤️ 段階的実装フェーズ
 
@@ -140,7 +143,7 @@ Skill はオーケストレーション役，Subagent は個別タスクの実�
 | 2 | `agent-templates/note-summarizer.md`，`agent-templates/note-tagger.md`，`list_materials.py`，`skill-templates/propose-articles/` | 完了 |
 | 3 | `agent-templates/article-proposer.md`，`agent-templates/article-drafter.md`，`skill-templates/structure-note/`，`skill-templates/writing-style/` のひな形 | 完了 |
 | 4 | `.textlintrc.json`，`prh.yml`，`.markdownlint-cli2.yaml` の汎用設定，`agent-templates/draft-reviewer.md`，`skill-templates/review-draft/`，`publish.py` | 未着手 |
-| 5 | `build_dictionary.py`，月次運用のドキュメント，CI ・ Skill チューニング | 未着手 |
+| 5 | `build_dictionary.py`，月次運用のドキュメント，CI・Skill チューニング | 未着手 |
 
 各フェーズは GitHub Issue（`phase-N` ラベル）で管理する．フェーズ間で依存があれば Issue 本文に明記する．
 
@@ -150,7 +153,7 @@ Skill はオーケストレーション役，Subagent は個別タスクの実�
 
 #### ストリーミングと base64 の扱い
 
-ENEX は 1 ファイルが数百 MB に達することもある．そのため `xml.etree.ElementTree.iterparse` で `<note>` 単位に処理し，各ノート末尾で `clear()` を呼んで子要素を解放する．`<resource><data>` の base64 本体は出力 Markdown へ含めない．ただし iterparse の性質上 end イベント到達時に `<data>` のテキストはメモリへ一度乗る．完全な非読込は `xml.sax` への切替が必要となるが，実 ENEX は 1 ノート 30MB 程度であり実害軽微として現方式を採用する．素材点数または 1 ノートのサイズが想定を超えた場合は SAX 切替を再検討する．
+ENEX は 1 ファイルが数百 MB に達することもある．そのため `xml.etree.ElementTree.iterparse` で `<note>` 単位にストリーミング処理する．各ノート末尾で `clear()` を呼んで子要素を解放する．`<resource><data>` の base64 本体は出力 Markdown へ含めない．ただし iterparse の性質上 end イベント到達時に `<data>` のテキストはメモリへ一度乗る．完全な非読込は `xml.sax` への切替が必要となるが，実 ENEX は 1 ノート 30MB 程度であり実害軽微として現方式を採用する．素材点数または 1 ノートのサイズが想定を超えた場合は SAX 切替を再検討する．
 
 #### 出力ファイル名のサニタイズ
 
@@ -166,7 +169,7 @@ ENEX は 1 ファイルが数百 MB に達することもある．そのため `
 
 #### Subagent ひな形
 
-`agent-templates/transcript-corrector.md` は frontmatter 付き Markdown で配置する．モデル指定はエイリアス（`sonnet`／`haiku`）で記述し，世代交代に追随する．利用者は Private リポジトリ側 `.claude/agents/` 配下にコピーし，固有名詞辞書 `vocabulary.yml` のパスとドメイン固有ルールを差し込む前提とする．本ひな形には個人色を含めない．
+`agent-templates/transcript-corrector.md` は frontmatter 付き Markdown で配置する．モデル指定はエイリアス（`sonnet`／`haiku`）で記述し，世代交代に追随する．利用者は Private リポジトリ側 `.claude/agents/` 配下にコピーして使う．固有名詞辞書 `vocabulary.yml` のパスとドメイン固有ルールは利用者が差し込む前提とする．本ひな形には個人色を含めない．
 
 ### フェーズ 3 の実装メモ
 

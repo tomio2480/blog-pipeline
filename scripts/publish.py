@@ -90,7 +90,9 @@ def build_wsse_header(username: str, api_key: str) -> str:
     """
     nonce_raw = os.urandom(20)
     created = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    digest_raw = hashlib.sha1(
+    # SHA-1 は WSSE 認証プロトコルの仕様で規定されているため変更不可．
+    # パスワードの保存用途ではなく，ワンタイム認証トークン生成のみに使用する．
+    digest_raw = hashlib.sha1(  # lgtm[py/weak-cryptographic-algorithm] noqa: S324
         nonce_raw + created.encode("utf-8") + api_key.encode("utf-8")
     ).digest()
     nonce_b64 = base64.b64encode(nonce_raw).decode("ascii")
@@ -103,8 +105,12 @@ def build_wsse_header(username: str, api_key: str) -> str:
     )
 
 
-def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
+def parse_frontmatter(text: str, *, source: str = "") -> tuple[dict[str, str], str]:
     """YAML フロントマターをシンプルに解析する．
+
+    Args:
+        text: ファイル全体のテキスト
+        source: 警告メッセージに付加するファイル名（省略可）
 
     Returns:
         (frontmatter_dict, body_text)
@@ -125,8 +131,9 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
         fm_lines.append(line)
 
     if not found_end:
+        prefix = f"{source}: " if source else ""
         print(
-            "Warning: フロントマターの終端 `---` が見つかりません．ファイル全体を本文として扱います．",
+            f"Warning: {prefix}フロントマターの終端 `---` が見つかりません．ファイル全体を本文として扱います．",
             file=sys.stderr,
         )
         return {}, text
@@ -165,13 +172,14 @@ def build_atom_entry(title: str, body: str) -> bytes:
 
 
 def extract_entry_id(response_body: bytes) -> str:
-    """AtomPub レスポンスの <id> 要素からエントリ ID を抽出する．"""
-    match = re.search(rb"<id>[^<]*tag:[^<]+?-(\d+)</id>", response_body)
+    """AtomPub レスポンスの <id> 要素からエントリ ID（末尾の数字列）を抽出する．
+
+    はてなブログの <id> は `tag:blog.hatena.ne.jp,...-{numeric_id}` 形式のため，
+    ハイフン直後の数字列を取り出す．複数の <id> があれば最初のものを使用する．
+    """
+    match = re.search(rb"<id>[^<]+-(\d+)</id>", response_body)
     if match:
         return match.group(1).decode("ascii")
-    match = re.search(rb"<id>([^<]+)</id>", response_body)
-    if match:
-        return match.group(1).decode("utf-8")
     return ""
 
 
@@ -183,7 +191,7 @@ def post_draft(
 ) -> None:
     """ドラフトファイルを読み込み，AtomPub 経由で下書き投稿する．"""
     text = draft_path.read_text(encoding="utf-8")
-    fm, body = parse_frontmatter(text)
+    fm, body = parse_frontmatter(text, source=str(draft_path))
 
     title = fm.get("draft_of") or draft_path.stem
     if not title:
