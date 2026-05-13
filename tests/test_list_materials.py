@@ -1,6 +1,6 @@
 """list_materials.py のテスト．TDD（Red-Green-Refactor）で実装する．
 
-必須テストケース 4 種 + 追加テスト 4 種の計 8 テストを含む．
+テストケース 23 件を含む．
 """
 
 from __future__ import annotations
@@ -438,4 +438,48 @@ def test_quoted_value_with_backslash_n_parses_correctly() -> None:
 
     assert result["summary"] == "line1\nline2", (
         f"\\n エスケープが改行文字にならなかった: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_with_escaped_backslash_parses_correctly() -> None:
+    r"""ダブルクォート内の \\ が単一バックスラッシュとして解析される（Issue #10）．
+    summary: "path\\to\\file" → 値が 'path\to\file' になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = r'summary: "path\\to\\file"'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == r"path\to\file", (
+        f"エスケープ済みバックスラッシュが正しく解析されなかった: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_with_yaml_only_escape_falls_back_to_find() -> None:
+    r"""JSON 不正なエスケープ（\a 等）は find ベースのフォールバックで処理される（Issue #10）．
+    YAML では \a はベル文字だが JSON では未定義のため JSONDecodeError が発生し，
+    フォールバックにより raw_val の find() で終端クォートを探して値を返す．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = r'summary: "\a"'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == r"\a", (
+        f"フォールバック経路の戻り値が期待と異なる: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_unterminated_falls_back_gracefully() -> None:
+    """終端クォートがない不正入力でもフォールバックが安全に値を返す（Issue #10）．
+    JSON デコードが失敗し，find() でも閉じクォートが見つからない場合は
+    raw_val[1:] を返す（開きクォートを除いた全体）．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'summary: "unterminated'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == "unterminated", (
+        f"未終端入力のフォールバック結果が期待と異なる: {result['summary']!r}"
     )
