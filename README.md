@@ -9,6 +9,7 @@
 - 📂 ディレクトリ構成
 - 🛤️ 実装フェーズと現状
 - 🔧 セットアップ
+- 🗓 運用手順
 - 🤝 開発に参加する
 - 📜 ライセンス
 
@@ -92,6 +93,55 @@ pytest -v
 ### CI
 
 CI は中央 composite action を呼び出す形で Markdown lint（`markdownlint`・`textlint`・`prh`）を回す．設定を上書きしたい場合は，リポジトリルートに `.markdownlint-cli2.yaml`・`.textlintrc.json`・`prh.yml` を置く．これらが中央設定より優先される（per-repo override）．Python テストの CI 化はフェーズ 5 で扱う．
+
+## 🗓 運用手順
+
+月次の辞書更新と，モデルの定期的なメンテナンス手順をまとめる．
+
+### 月次辞書更新
+
+月初め（毎月 1 日前後）に手動で実施する．
+
+#### 実行手順
+
+1. `python scripts/build_dictionary.py` を実行して `vocabulary/candidates.yml` を生成する．
+2. `candidates.yml` を確認し，採用候補語を選別する（採用基準は後述）．
+3. 採用語を `vocabulary/vocabulary.yml` の適切なカテゴリへ追記する．
+   - `canonical` に正式表記，`aliases` に表記ゆれ，`note` に補足を記入する．
+4. 変更を commit し，Draft PR として起票する．
+
+#### 採用基準
+
+以下の条件を満たす語を採用候補とする．
+
+- **固有名詞** ：製品名・サービス名・組織名・イベント名
+- **技術用語** ：プログラミング言語・ライブラリ・ツール名・概念語
+- **出現頻度** ：同一の表記が 2 件以上のソースに出現するものを優先する．4 件以上は積極採用の目安とする．
+- **誤認識リスク** ：`transcript-corrector` が誤変換しやすい語は 1 件でも採用を検討する．
+
+以下は採用しない．
+
+- 一般的な日本語名詞（「情報」「改善」「構成」など）
+- 文脈なしには固有名詞か判断できない語
+- `vocabulary.yml` に登録済みの語
+
+#### 実施記録
+
+採用・不採用の判断と理由を `docs/notes/YYYY-MM-dict-update.md` に記録する．更新不要な月は「更新不要と判断」の一行でよい．
+
+### Subagent モデルの世代交代
+
+Claude のモデルは定期的に世代が更新される．新世代が安定したら Subagent の指定モデルを変更する．
+
+Private リポジトリの `.claude/agents/` 配下に配置した各 Subagent 定義ファイルの
+`model:` フィールドを更新する．`agent-templates/*.md` がひな形である．
+最新のモデル名は [Anthropic Models overview](https://docs.claude.com/en/docs/about-claude/models/overview) を参照する．
+
+### 文体プロファイルの劣化検知
+
+文体は時間とともに変化する．古いプロファイルに引きずられると出力品質が低下するため，
+年 1 回程度を目安に `style-profile.md` を見直す．
+更新は執筆者の明示指示で起動する（自動更新は採用しない）．
 
 ## 🤝 開発に参加する
 
