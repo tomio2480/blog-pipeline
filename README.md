@@ -97,8 +97,7 @@ CI は中央 composite action を呼び出す形で Markdown lint（`markdownlin
 ## 🗓 運用手順
 
 月次の辞書更新と，モデルの定期的なメンテナンス手順をまとめる．
-Private リポジトリで素材を管理する場合は，`materials/` や `docs/notes/` 等の
-個人データディレクトリを `.gitignore` で Git 管理対象から除外しておくこと．
+Private リポジトリでは `materials/` や `docs/notes/` 等の個人データを `.gitignore` で除外すること．
 
 ### 月次辞書更新
 
