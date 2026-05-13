@@ -429,7 +429,7 @@ def test_quoted_value_with_escaped_quotes_parses_correctly() -> None:
 
 def test_quoted_value_with_backslash_n_parses_correctly() -> None:
     """ダブルクォート内の \\n エスケープが改行文字として解析される（Issue #10）．
-    summary: "line1\\nline2" → 値が 'line1\\nline2'（改行文字含む）になる．
+    summary: "line1\\nline2" → 改行を含む文字列になる．
     """
     from list_materials import _parse_simple_yaml
 
