@@ -100,6 +100,8 @@ CI は中央 composite action を呼び出す形で Markdown lint（`markdownlin
 
 ### 月次辞書更新
 
+`scripts/build_dictionary.py` と `vocabulary/` ディレクトリは [Issue #6](https://github.com/tomio2480/blog-pipeline/issues/6) で別途実装される予定である．以下は実装完了後の手順である．
+
 月初め（毎月 1 日前後）に手動で実施する．
 
 #### 実行手順

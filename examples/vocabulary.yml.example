@@ -4,6 +4,7 @@
 # scripts/vocabulary/ 配下に vocabulary.yml として配置する．
 #
 # スキーマ：
+#   トップレベルに version / updated / maintainer を持つ．
 #   places / organizations / technical_terms それぞれ配列．各エントリは
 #     - canonical: 正規表記．補正後にこの表記へ統一する
 #     - aliases:   別表記・誤認識パターン（配列）．完全一致で照合
@@ -20,7 +21,7 @@
 # updated は人間がメンテナンスした最終日付．
 # maintainer は GitHub ハンドル（実名は記載しない）．
 version: 1
-updated: "2025-01-01"
+updated: "YYYY-MM-DD"
 maintainer: "your-github-handle"
 
 # 地名
