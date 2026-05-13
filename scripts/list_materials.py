@@ -59,16 +59,16 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
         # ただしクォート内の # は除去しない
         if raw_val.startswith('"') or raw_val.startswith("'"):
             quote_char = raw_val[0]
+            value = None
             if quote_char == '"':
                 # ダブルクォート：JSON 文字列として解析し \" や \n 等を処理する
                 try:
-                    value: Any
                     value, _ = json.JSONDecoder().raw_decode(raw_val)
                 except json.JSONDecodeError:
-                    end_idx = raw_val.find(quote_char, 1)
-                    value = raw_val[1:end_idx] if end_idx != -1 else raw_val[1:]
-            else:
-                # シングルクォート：エスケープなしで終了クォートを探す
+                    pass
+
+            if value is None:
+                # シングルクォートまたは解析失敗時：エスケープなしで終了クォートを探す
                 end_idx = raw_val.find(quote_char, 1)
                 value = raw_val[1:end_idx] if end_idx != -1 else raw_val[1:]
             result[key] = value
