@@ -91,7 +91,7 @@ def load_vocabulary(vocab_path: Path) -> tuple[list[str], set[str]]:
     udic_lines: list[str] = []
 
     for category in _VOCAB_CATEGORIES:
-        for entry in data.get(category, []):
+        for entry in (data.get(category) or []):
             if not isinstance(entry, dict) or "canonical" not in entry:
                 continue
             canonical: str = entry["canonical"]
@@ -99,7 +99,7 @@ def load_vocabulary(vocab_path: Path) -> tuple[list[str], set[str]]:
             if "," not in canonical:
                 udic_lines.append(f"{canonical},名詞,{canonical}")
 
-            for alias in entry.get("aliases", []):
+            for alias in (entry.get("aliases") or []):
                 known.add(alias)
                 if "," not in alias:
                     udic_lines.append(f"{alias},名詞,{alias}")

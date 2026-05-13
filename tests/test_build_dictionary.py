@@ -328,6 +328,24 @@ class TestLoadVocabularyDefensive:
             load_vocabulary(p)
         assert exc.value.code == 1
 
+    def test_category_null_value_treated_as_empty(self, tmp_path):
+        p = tmp_path / "vocabulary.yml"
+        p.write_text("places:\norganizations:\ntechnical_terms:\n", encoding="utf-8")
+        udic_lines, known = load_vocabulary(p)
+        assert udic_lines == []
+        assert known == set()
+
+    def test_aliases_null_value_treated_as_empty(self, tmp_path):
+        data = {
+            "places": [{"canonical": "東京", "aliases": None}],
+            "organizations": [],
+            "technical_terms": [],
+        }
+        path = self._write_vocab(tmp_path, data)
+        udic_lines, known = load_vocabulary(path)
+        assert "東京" in known
+        assert len(udic_lines) == 1
+
 
 # ---------------------------------------------------------------------------
 # _build_tokenizer
