@@ -1,0 +1,75 @@
+# vocabulary.yml のサンプル．
+#
+# 実際に利用する際は，Private リポジトリの
+# scripts/vocabulary/ 配下に vocabulary.yml として配置する．
+#
+# スキーマ：
+#   トップレベルに version / updated / maintainer を持つ．
+#   places / organizations / technical_terms それぞれ配列．各エントリは
+#     - canonical: 正規表記．補正後にこの表記へ統一する
+#     - aliases:   別表記・誤認識パターン（配列）．完全一致で照合
+#     - note:      人間向け補足（任意）
+#
+# 補正ポリシー：
+#   - aliases に完全一致したトークンのみ canonical へ置換する
+#   - 文脈不明な部分一致では補正しない（誤補正リスク回避）
+#   - 人名は本辞書には登録しない（誤検出が大きいため）
+#
+# 詳細は README の「月次辞書更新」節を参照すること．
+
+# version はスキーマのバージョン．構造を変更した際にインクリメントする．
+# updated は人間がメンテナンスした最終日付．
+# maintainer は GitHub ハンドル（実名は記載しない）．
+version: 1
+updated: "YYYY-MM-DD"
+maintainer: "your-github-handle"
+
+# 地名
+places:
+  - canonical: 東京
+    aliases:
+      - 東京都
+      - とうきょう
+    note: 日本の首都
+
+  - canonical: 大阪
+    aliases:
+      - 大阪府
+      - 大阪市
+      - おおさか
+    note: 関西の中心都市
+
+# 団体・コミュニティ・カンファレンス名
+organizations:
+  - canonical: PyCon JP
+    aliases:
+      - パイコンジャパン
+      - pycon jp
+    note: 日本の Python カンファレンス
+
+  - canonical: GitHub
+    aliases:
+      - ギットハブ
+      - github
+    note: Microsoft が運営するコードホスティングサービス
+
+# 技術用語・ツール名
+technical_terms:
+  - canonical: Claude Code
+    aliases:
+      - クロードコード
+      - claude code
+      - claudecode
+    note: Anthropic の CLI 開発エージェント
+
+  - canonical: GitHub Actions
+    aliases:
+      - ギットハブアクションズ
+      - github actions
+    note: GitHub の CI/CD 機能
+
+  - canonical: Python
+    aliases:
+      - ぱいそん
+      - python
+    note: プログラミング言語
