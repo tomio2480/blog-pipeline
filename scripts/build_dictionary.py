@@ -77,8 +77,12 @@ def load_vocabulary(vocab_path: Path) -> tuple[list[str], set[str]]:
     ユーザー辞書の形式（janome simpledic）: surface,品詞,読み
     カンマを含むエントリは simpledic の区切り文字と衝突するため辞書行から除外する．
     """
-    with open(vocab_path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
+    try:
+        with open(vocab_path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+    except (yaml.YAMLError, OSError, UnicodeDecodeError) as e:
+        print(f"エラー: {vocab_path} の処理に失敗しました: {e}", file=sys.stderr)
+        sys.exit(1)
 
     if not isinstance(data, dict):
         data = {}

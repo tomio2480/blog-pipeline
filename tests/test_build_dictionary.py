@@ -6,6 +6,7 @@ build_dictionary.py の各関数に対するユニットテスト．
 
 from pathlib import Path
 
+import pytest
 import yaml
 
 from janome.tokenizer import Tokenizer
@@ -311,6 +312,21 @@ class TestLoadVocabularyDefensive:
         udic_lines, known = load_vocabulary(p)
         assert udic_lines == []
         assert known == set()
+
+    def test_invalid_yaml_exits(self, tmp_path):
+        p = tmp_path / "vocabulary.yml"
+        p.write_text("key: :\n  invalid: [unclosed", encoding="utf-8")
+        with pytest.raises(SystemExit) as exc:
+            load_vocabulary(p)
+        assert exc.value.code == 1
+
+    def test_permission_error_exits(self, tmp_path, monkeypatch):
+        p = tmp_path / "vocabulary.yml"
+        p.write_text("", encoding="utf-8")
+        monkeypatch.setattr("builtins.open", lambda *a, **kw: (_ for _ in ()).throw(OSError("Permission denied")))
+        with pytest.raises(SystemExit) as exc:
+            load_vocabulary(p)
+        assert exc.value.code == 1
 
 
 # ---------------------------------------------------------------------------
