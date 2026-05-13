@@ -49,8 +49,8 @@
 | 1 | `parse_enex.py`，`agent-templates/transcript-corrector.md` | 完了 |
 | 2 | `note-summarizer`，`note-tagger`，`list_materials.py`，`propose-articles` | 完了 |
 | 3 | `article-proposer`，`article-drafter`，`structure-note`，`writing-style` ひな形 | 完了 |
-| 4 | `.textlintrc.json`，`prh.yml`，`.markdownlint-cli2.yaml`，`draft-reviewer`，`review-draft`，`publish.py` | 未着手 |
-| 5 | `build_dictionary.py`，月次運用ドキュメント，CI・Skill チューニング | 未着手 |
+| 4 | lint 設定ファイル群，`draft-reviewer`，`review-draft`，`publish.py` | 完了 |
+| 5 | `build_dictionary.py`，月次運用ドキュメント，CI・Skill チューニング | 完了 |
 
 `.textlintrc.json`・`prh.yml`・`.markdownlint-cli2.yaml` はフェーズ 4 で追加する．それまでは中央テンプレート（[tomio2480/github-workflows](https://github.com/tomio2480/github-workflows)）の標準設定が CI で適用される．
 
@@ -82,6 +82,26 @@ python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
 
 出力は 1 ノート 1 ファイルで，フロントマター付き Markdown となる．3 セクション構成（🗒️ 人間メモ／🤖 Evernote AI 構造化情報／🗣️ 生の文字起こし）．ENEX 内の音声 base64 データは出力に含めない．
 
+### `build_dictionary.py` の使い方
+
+`vocabulary/vocabulary.yml` を参照しながら Markdown ファイルを形態素解析し，未知語候補を抽出する．
+
+```bash
+# デフォルトのパスで実行（vocabulary/ と materials/raw/ が対象）
+python scripts/build_dictionary.py
+
+# パスを明示して実行
+python scripts/build_dictionary.py \
+  --vocab path/to/vocabulary.yml \
+  --materials path/to/materials \
+  --output path/to/candidates.yml
+```
+
+出力先（デフォルト: `vocabulary/candidates.yml`）は毎回上書きされる．git 管理は不要．
+候補のレビューと `vocabulary.yml` への追記方法は `🗓 運用手順` の「月次辞書更新」節を参照のこと．
+
+サンプルの `vocabulary.yml` は `examples/vocabulary.yml` を参照すること．
+
 ### テスト
 
 ```bash
@@ -100,8 +120,6 @@ CI は中央 composite action を呼び出す形で Markdown lint（`markdownlin
 Private リポジトリでは `materials/` や `docs/notes/` 等の個人データを `.gitignore` で除外すること．
 
 ### 月次辞書更新
-
-`scripts/build_dictionary.py` と `vocabulary/` ディレクトリは [Issue #6](https://github.com/tomio2480/blog-pipeline/issues/6) で別途実装される予定である．以下は実装完了後の手順である．
 
 月初め（毎月 1 日前後）に手動で実施する．
 

@@ -8,6 +8,10 @@ version = "0.1.0"
 description = "音声メモ起点のブログ執筆支援パイプライン（汎用スクリプト・Skill ひな形）"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
+dependencies = [
+    "janome>=0.5.0,<1.0",
+    "pyyaml>=6.0",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
