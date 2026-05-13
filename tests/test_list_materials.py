@@ -1,6 +1,6 @@
 """list_materials.py のテスト．TDD（Red-Green-Refactor）で実装する．
 
-必須テストケース 4 種 + 追加テスト 4 種の計 8 テストを含む．
+テストケース 23 件を含む．
 """
 
 from __future__ import annotations
@@ -408,3 +408,78 @@ def test_extract_frontmatter_does_not_swallow_keyboard_interrupt(
     text = "---\nfoo: bar\n---\n\n本文\n"
     with pytest.raises(KeyboardInterrupt):
         _extract_frontmatter(text)
+
+
+# ---------- Issue #10: クォート内エスケープ対応 ----------
+
+
+def test_quoted_value_with_escaped_quotes_parses_correctly() -> None:
+    """ダブルクォート内のエスケープ済みクォートが正しく解析される（Issue #10）．
+    summary: "Review of \\"The Book\\"" → 値が 'Review of "The Book"' になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'summary: "Review of \\"The Book\\""'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == 'Review of "The Book"', (
+        f"エスケープ済みクォートが正しく解析されなかった: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_with_backslash_n_parses_correctly() -> None:
+    """ダブルクォート内の \\n エスケープが改行文字として解析される（Issue #10）．
+    summary: "line1\\nline2" → 改行を含む文字列になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'summary: "line1\\nline2"'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == "line1\nline2", (
+        f"\\n エスケープが改行文字にならなかった: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_with_escaped_backslash_parses_correctly() -> None:
+    r"""ダブルクォート内の \\ が単一バックスラッシュとして解析される（Issue #10）．
+    summary: "path\\to\\file" → 値が 'path\to\file' になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = r'summary: "path\\to\\file"'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == r"path\to\file", (
+        f"エスケープ済みバックスラッシュが正しく解析されなかった: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_with_yaml_only_escape_falls_back_to_find() -> None:
+    r"""JSON 不正なエスケープ（\a 等）は find ベースのフォールバックで処理される（Issue #10）．
+    YAML では \a はベル文字だが JSON では未定義のため JSONDecodeError が発生し，
+    フォールバックにより raw_val の find() で終端クォートを探して値を返す．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = r'summary: "\a"'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == r"\a", (
+        f"フォールバック経路の戻り値が期待と異なる: {result['summary']!r}"
+    )
+
+
+def test_quoted_value_unterminated_falls_back_gracefully() -> None:
+    """終端クォートがない不正入力でもフォールバックが安全に値を返す（Issue #10）．
+    JSON デコードが失敗し，find() でも閉じクォートが見つからない場合は
+    raw_val[1:] を返す（開きクォートを除いた全体）．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'summary: "unterminated'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["summary"] == "unterminated", (
+        f"未終端入力のフォールバック結果が期待と異なる: {result['summary']!r}"
+    )
