@@ -37,6 +37,7 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
     """
     result: dict[str, Any] = {}
     lines = text.splitlines()
+    decoder = json.JSONDecoder()
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -63,7 +64,7 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
             if quote_char == '"':
                 # ダブルクォート：JSON 文字列として解析し \" や \n 等を処理する
                 try:
-                    value, _ = json.JSONDecoder().raw_decode(raw_val)
+                    value, _ = decoder.raw_decode(raw_val)
                 except json.JSONDecodeError:
                     pass
 
