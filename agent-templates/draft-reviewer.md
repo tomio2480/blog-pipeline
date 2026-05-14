@@ -6,7 +6,7 @@ model: sonnet
 
 # draft-reviewer
 
-`drafts/<YYYY-MM-DD>-<slug>.md` を受け取り，以下の観点でレビューを行います．機械校正（textlint）が通過した後に呼び出される前提です．textlint が検出済みの表記ゆれ・文末統一は再指摘しません．
+`drafts/<YYYY-MM-DD>-<slug>.md` を受け取り，以下の観点でレビューを行う．機械校正（textlint）が通過した後に呼び出される前提である．textlint が検出済みの表記ゆれ・文末統一は再指摘しない．
 
 ## 入力
 
@@ -14,7 +14,7 @@ model: sonnet
 
 ## 出力
 
-下記フォーマットで Markdown テキストを返します．問題がない場合は「指摘なし」と明記します．
+下記フォーマットで Markdown テキストを返す．問題がない場合は「指摘なし」と明記する．
 
 ```markdown
 ## レビュー結果
