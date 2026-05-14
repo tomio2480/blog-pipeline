@@ -60,6 +60,9 @@ python scripts/list_materials.py materials/corrected/ --format json
 - `summary`：既存の要約（無い場合は空文字列）
 - `auto_tags`：既存の自動推定タグ（無い場合は空配列）
 
+上記のほか，フロントマター由来の `source`・`updated`・`author`・`attachments` なども含まれる場合がある．
+クラスタリングでは `note_title`・`summary`・`tags`・`auto_tags` を主に参照すればよい．
+
 ### 2. 要約・タグ推定の補完
 
 `summary` または `auto_tags` が欠損している素材を抽出する．欠損がある場合は `note-summarizer`／`note-tagger` Subagent を **並列で起動** する．並列度の既定は 5 件以下．

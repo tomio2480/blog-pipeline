@@ -56,7 +56,10 @@
 
 ## 🔧 セットアップ
 
-スクリプト本体は `scripts/` 配下にある．依存はサードパーティ非依存（標準ライブラリのみ）で実装するが，テストは `pytest` を使う．
+スクリプト本体は `scripts/` 配下にある．
+`parse_enex.py`・`list_materials.py`・`publish.py` は標準ライブラリのみで実装している．
+`build_dictionary.py` は形態素解析のため `janome` と `pyyaml` を使用する．
+テストは `pytest` を使う．
 
 ### Python 環境
 
@@ -100,7 +103,38 @@ python scripts/build_dictionary.py \
 出力先（デフォルト: `vocabulary/candidates.yml`）は毎回上書きされる．git 管理は不要．
 候補のレビューと `vocabulary.yml` への追記方法は `🗓 運用手順` の「月次辞書更新」節を参照のこと．
 
+月次辞書更新では `materials/raw/` でなく `materials/corrected/` の使用を推奨する．
+明示する場合は `--materials materials/corrected` を指定すること．
+
 サンプルの `vocabulary.yml` は `examples/vocabulary.yml` を参照すること．
+
+### `list_materials.py` の使い方
+
+補正済み素材の一覧と要約・タグを JSON または Table 形式で取得する．
+
+```bash
+python scripts/list_materials.py materials/corrected/ --format json
+python scripts/list_materials.py materials/corrected/ --format table
+```
+
+`propose-articles` Skill はこのコマンドで素材一覧を取得する．
+
+### `publish.py` の使い方
+
+ドラフトをはてなブログへ下書き投稿する．以下の環境変数を `.env` ファイルに設定すること．
+
+| 変数名 | 説明 |
+|---|---|
+| `HATENA_USERNAME` | はてなユーザー名 |
+| `HATENA_BLOG_ID` | ブログ ID（例：`yourname.hatenablog.com`） |
+| `HATENA_API_KEY` | はてなブログ AtomPub API キー |
+
+```bash
+python scripts/publish.py drafts/2026-05-07-my-article.md
+python scripts/publish.py drafts/2026-05-07-my-article.md --env-file /path/to/.env
+```
+
+常に下書きとして投稿する．公開判断ははてなブログ管理画面で人間が行う．
 
 ### テスト
 
