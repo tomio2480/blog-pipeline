@@ -103,9 +103,8 @@ python scripts/build_dictionary.py \
 出力先（デフォルト: `vocabulary/candidates.yml`）は毎回上書きされる．git 管理は不要．
 候補のレビューと `vocabulary.yml` への追記方法は `🗓 運用手順` の「月次辞書更新」節を参照のこと．
 
-月次辞書更新での素材ディレクトリは，デフォルトの `materials/raw/` ではなく
-補正済み素材 `materials/corrected/` を対象とすることを推奨する．
-その場合は `--materials materials/corrected` を明示すること．
+月次辞書更新では `materials/raw/` でなく `materials/corrected/` の使用を推奨する．
+明示する場合は `--materials materials/corrected` を指定すること．
 
 サンプルの `vocabulary.yml` は `examples/vocabulary.yml` を参照すること．
 
