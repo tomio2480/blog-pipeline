@@ -58,6 +58,7 @@
 
 スクリプト本体は `scripts/` 配下にある．
 `parse_enex.py`・`list_materials.py`・`publish.py` は標準ライブラリのみで実装している．
+`prompt-maker/generate_prompts.py` も同様である．
 `build_dictionary.py` は形態素解析のため `janome` と `pyyaml` を使用する．
 テストは `pytest` を使う．
 
@@ -74,6 +75,28 @@ pip install -e ".[dev]"
 # pytest だけが必要であれば
 pip install pytest
 ```
+
+### `generate_prompts.py` の使い方
+
+Evernote AI に投入する構造化プロンプトを 3 段階分生成する．
+
+```bash
+python scripts/prompt-maker/generate_prompts.py "2026-05-21-セッション名"
+```
+
+セッション識別子を渡すと，同名のディレクトリへ 3 ファイルが生成される．
+
+```
+2026-05-21-セッション名/
+├── 01_structure.md     # 文字起こし構造化プロンプト
+├── 02_links.md         # リンク整理・提案プロンプト
+└── 03_proper_nouns.md  # 固有名詞校閲プロンプト
+```
+
+生成したファイルを順に Evernote AI のチャットへ貼り付ける．
+各段階は別チャットで実行することを推奨する（Evernote AI のチャット長制限を回避するため）．
+
+詳細は `scripts/prompt-maker/README.md` を参照すること．
 
 ### `parse_enex.py` の使い方
 
