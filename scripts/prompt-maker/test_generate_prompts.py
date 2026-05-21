@@ -10,6 +10,7 @@ from generate_prompts import (
     build_source_note_title,
     generate_all_prompts,
     load_template,
+    validate_session_id,
 )
 
 
@@ -211,6 +212,31 @@ class TestGenerateAllPrompts:
         )
         stems = [p.stem for p in paths]
         assert stems == list(STAGE_KEYS)
+
+
+
+class TestValidateSessionId:
+    """validate_session_id のテスト．"""
+
+    def test_typical_session_id_passes(self):
+        validate_session_id("2026-05-01-他人のルールに乗る")
+
+    def test_simple_ascii_passes(self):
+        validate_session_id("foo-bar")
+
+    def test_traversal_double_dot_raises(self):
+        with pytest.raises(ValueError, match="上位ディレクトリ"):
+            validate_session_id("../../some/dir")
+
+    def test_traversal_in_nested_path_raises(self):
+        with pytest.raises(ValueError, match="上位ディレクトリ"):
+            validate_session_id("foo/../../bar")
+
+    def test_absolute_path_raises(self):
+        import os
+        abs_path = os.path.abspath("test-dir")
+        with pytest.raises(ValueError, match="絶対パス"):
+            validate_session_id(abs_path)
 
 
 class TestRealTemplates:

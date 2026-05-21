@@ -25,6 +25,27 @@ PLACEHOLDER_SESSION_ID = "{session_id}"
 PLACEHOLDER_SOURCE_NOTE = "{source_note}"
 
 
+
+def validate_session_id(session_id: str) -> None:
+    """session_id にパストラバーサルになりうるパターンが含まれていないか検証する．
+
+    Args:
+        session_id: 検証対象のセッション識別子．
+
+    Raises:
+        ValueError: 絶対パスまたはトラバーサルパターンが含まれている場合．
+    """
+    p = Path(session_id)
+    if p.is_absolute():
+        raise ValueError(
+            f"session_id には絶対パスを指定できません：{session_id!r}"
+        )
+    if ".." in p.parts:
+        raise ValueError(
+            f"session_id に上位ディレクトリへの参照を含めることはできません：{session_id!r}"
+        )
+
+
 def build_source_note_title(
     session_id: str, suffix: str = DEFAULT_SOURCE_SUFFIX
 ) -> str:
@@ -152,6 +173,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = _parse_args()
+    validate_session_id(args.session_id)
     output_dir: Path = (
         args.output_dir if args.output_dir is not None else Path(args.session_id)
     )

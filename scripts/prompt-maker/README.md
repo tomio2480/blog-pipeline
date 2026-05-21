@@ -1,7 +1,7 @@
 # Evernote AI 文字起こし整理プロンプト生成 CLI
 
 Evernote AI へ投入するプロンプトを，セッション識別子から自動生成する Python CLI．
-3 段階に分けたマークダウンテンプレートに値を埋め込み，識別子と同名のフォルダへ書き出す．
+3 段階に分けた Markdown テンプレートへ値を埋め込み，識別子と同名のフォルダへ書き出す．
 
 ## 📑 目次
 
@@ -72,7 +72,7 @@ Evernote AI に対して文字起こしの構造化を依頼する際，
 
 ## 📥 インストール
 
-リポジトリから `generate_prompts.py`・`test_generate_prompts.py`・`templates/` を取得し，
+リポジトリから `generate_prompts.py`・`test_generate_prompts.py`・`templates/` を取得する．
 任意の作業ディレクトリへ配置する．
 
 テスト実行用に pytest を導入する．
@@ -136,7 +136,7 @@ python generate_prompts.py "foo" --source-suffix "文字起こし"
 プロンプトを改善したい場合は `templates/` 配下のファイルを直接編集する．
 Python ソースに手を入れる必要はない．
 
-各ファイルは通常のマークダウンとして扱える．
+各ファイルは通常の Markdown として扱える．
 コードブロックや表，リストなどはそのまま記述してよい．
 
 `03_proper_nouns.md` は Evernote ノート `固有名詞マスター` を参照する設定になっている．
@@ -214,11 +214,11 @@ python -m pytest test_generate_prompts.py -v
 
 新しい段階を追加する場合の手順を示す．
 
-第一に，`templates/` に新しいマークダウンファイルを追加する．
+第一に，`templates/` に新しい Markdown ファイルを追加する．
 ファイル名は `04_summary.md` のように 2 桁の連番＋スネークケースとする．
 
-第二に，`generate_prompts.py` の `STAGE_KEYS` 定数の末尾に，
-ファイル名から拡張子を除いたキー（例：`04_summary`）を追加する．
+第二に，`generate_prompts.py` の `STAGE_KEYS` 定数の末尾に新しいキーを追加する．
+ファイル名から拡張子を除いた文字列（例：`04_summary`）である．
 
 第三に，テストを追加する．
 `STAGE_KEYS` を参照しているテストは自動的に新しい段階を含めるため，
