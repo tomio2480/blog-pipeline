@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import re
 from pathlib import Path
 
 DEFAULT_SOURCE_SUFFIX = "元ノート"
@@ -24,6 +25,11 @@ STAGE_KEYS = ("01_structure", "02_links", "03_proper_nouns")
 PLACEHOLDER_SESSION_ID = "{session_id}"
 PLACEHOLDER_SOURCE_NOTE = "{source_note}"
 
+# ファイル名として使えない Windows 予約文字（セパレータ含む）
+_WINDOWS_INVALID_CHARS = re.compile(r'[\\/:*?"<>|]')
+# session_id の最大長
+_SESSION_ID_MAX_LENGTH = 80
+
 
 
 def validate_session_id(session_id: str) -> None:
@@ -33,8 +39,18 @@ def validate_session_id(session_id: str) -> None:
         session_id: 検証対象のセッション識別子．
 
     Raises:
-        ValueError: 絶対パスまたはトラバーサルパターンが含まれている場合．
+        ValueError: 絶対パス，トラバーサルパターン，使用禁止文字，
+                    または長すぎる文字列が含まれている場合．
     """
+    if len(session_id) > _SESSION_ID_MAX_LENGTH:
+        raise ValueError(
+            f"session_id は {_SESSION_ID_MAX_LENGTH} 字以内にしてください："
+            f"{session_id!r}"
+        )
+    if any(ord(c) < 32 for c in session_id):
+        raise ValueError(
+            f"session_id に制御文字を含めることはできません：{session_id!r}"
+        )
     p = Path(session_id)
     if p.is_absolute():
         raise ValueError(
@@ -43,6 +59,11 @@ def validate_session_id(session_id: str) -> None:
     if ".." in p.parts:
         raise ValueError(
             f"session_id に上位ディレクトリへの参照を含めることはできません：{session_id!r}"
+        )
+    if _WINDOWS_INVALID_CHARS.search(session_id):
+        raise ValueError(
+            f"session_id にファイル名として使えない文字が含まれています："
+            f"{session_id!r}"
         )
 
 
@@ -124,7 +145,13 @@ def generate_all_prompts(
     Raises:
         FileNotFoundError: いずれかのテンプレートが見つからない場合．
     """
-    output_dir.mkdir(parents=True, exist_ok=True)
+    validate_session_id(session_id)
+    try:
+        output_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise OSError(
+            f"出力ディレクトリを作成できませんでした：{output_dir}"
+        ) from exc
     paths: list[Path] = []
     for stage_key in STAGE_KEYS:
         template = load_template(stage_key, templates_dir)

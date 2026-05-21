@@ -238,6 +238,36 @@ class TestValidateSessionId:
         with pytest.raises(ValueError, match="絶対パス"):
             validate_session_id(abs_path)
 
+    def test_windows_invalid_char_raises(self):
+        """Windows のファイル名として無効な文字を含む場合は ValueError．"""
+        with pytest.raises(ValueError, match="ファイル名として使えない"):
+            validate_session_id("foo*bar")
+
+    def test_max_length_boundary_passes(self):
+        """ちょうど最大長（80 字）は許可される．"""
+        validate_session_id("a" * 80)
+
+    def test_over_max_length_raises(self):
+        """最大長を超えると ValueError．"""
+        with pytest.raises(ValueError, match="80 字以内"):
+            validate_session_id("a" * 81)
+
+    def test_control_char_raises(self):
+        """制御文字を含む場合は ValueError．"""
+        with pytest.raises(ValueError, match="制御文字"):
+            validate_session_id("foo\tbar")
+
+    def test_generate_all_prompts_validates_session_id(
+        self, fake_templates_dir: Path, tmp_path: Path
+    ):
+        """generate_all_prompts はライブラリ利用時も session_id を検証する．"""
+        with pytest.raises(ValueError):
+            generate_all_prompts(
+                session_id="bad*id",
+                output_dir=tmp_path / "out",
+                templates_dir=fake_templates_dir,
+            )
+
 
 class TestRealTemplates:
     """同梱の本物テンプレートを使った統合テスト．"""
