@@ -97,7 +97,7 @@ class TestLoadTemplate:
 class TestGenerateAllPrompts:
     """generate_all_prompts のテスト．"""
 
-    def test_creates_three_files(
+    def test_creates_one_file_per_stage(
         self, fake_templates_dir: Path, tmp_path: Path
     ):
         output_dir = tmp_path / "out"
@@ -106,7 +106,7 @@ class TestGenerateAllPrompts:
             output_dir=output_dir,
             templates_dir=fake_templates_dir,
         )
-        assert len(paths) == 3
+        assert len(paths) == len(STAGE_KEYS)
 
     def test_all_files_exist(self, fake_templates_dir: Path, tmp_path: Path):
         output_dir = tmp_path / "out"
@@ -289,10 +289,19 @@ class TestRealTemplates:
             output_dir=tmp_path / "out",
             templates_dir=project_templates_dir,
         )
-        assert len(paths) == 3
+        assert len(paths) == len(STAGE_KEYS)
         for path in paths:
             content = path.read_text(encoding="utf-8")
             assert "2026-05-01-他人のルールに乗る" in content
+
+    def test_transcript_dump_template_targets_raw_transcript_block(
+        self, project_templates_dir: Path
+    ):
+        """04 段階のテンプレは元ノートの「生の文字起こし」ブロックを指定する．"""
+        content = (
+            project_templates_dir / "04_transcript_dump.md"
+        ).read_text(encoding="utf-8")
+        assert "生の文字起こし" in content
 
 
 if __name__ == "__main__":

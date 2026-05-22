@@ -1,7 +1,7 @@
 """Evernote AI 文字起こし整理プロンプトを生成する CLI．
 
 `templates/` ディレクトリ配下のマークダウンテンプレートに，
-セッション識別子を埋め込んで，3 段階分のプロンプトを出力する．
+セッション識別子を埋め込んで，4 段階分のプロンプトを出力する．
 
 Usage:
     python generate_prompts.py "2026-05-01-他人のルールに乗る"
@@ -20,7 +20,12 @@ DEFAULT_SOURCE_SUFFIX = "元ノート"
 SCRIPT_DIR = Path(__file__).parent.resolve()
 DEFAULT_TEMPLATES_DIR = SCRIPT_DIR / "templates"
 
-STAGE_KEYS = ("01_structure", "02_links", "03_proper_nouns")
+STAGE_KEYS = (
+    "01_structure",
+    "02_links",
+    "03_proper_nouns",
+    "04_transcript_dump",
+)
 
 PLACEHOLDER_SESSION_ID = "{session_id}"
 PLACEHOLDER_SOURCE_NOTE = "{source_note}"
