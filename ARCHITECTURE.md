@@ -44,7 +44,7 @@
     ↓
 [scripts/prompt-maker/generate_prompts.py]  Evernote AI プロンプト生成
     ↓
-[Evernote AI 構造化（3 段階プロンプト投入）]
+[Evernote AI 構造化（4 段階プロンプト投入）]
     ↓
 [人間 ENEX エクスポート]
     ↓
@@ -70,7 +70,8 @@
 ```
 
 文字起こしは Evernote 内蔵の機能を利用する．
-構造化は `generate_prompts.py` が生成したプロンプトを Evernote AI に投入して行う（3 段階）．
+構造化は `generate_prompts.py` が生成したプロンプトを Evernote AI に投入して行う（4 段階）．
+4 段階は構造化・リンク提案・固有名詞校閲に加え，文字起こし全文を元ノート本文へ保全する段階を含む．
 素材は ENEX エクスポートで人間がリポジトリに橋渡しする．
 これにより whisper.cpp や Evernote API への依存を排し，利用者の準備コストを最小化する．
 
