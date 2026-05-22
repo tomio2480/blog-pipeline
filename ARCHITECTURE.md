@@ -40,7 +40,11 @@
 ```
 [人間 録音 + Evernote 添付]
     ↓
-[Evernote 内蔵文字起こし + Evernote AI 構造化]
+[Evernote 内蔵文字起こし]
+    ↓
+[scripts/prompt-maker/generate_prompts.py]  Evernote AI プロンプト生成
+    ↓
+[Evernote AI 構造化（3 段階プロンプト投入）]
     ↓
 [人間 ENEX エクスポート]
     ↓
@@ -65,7 +69,10 @@
 [人間 公開判断]
 ```
 
-文字起こしは Evernote 内蔵の機能と Evernote AI の構造化結果を利用する．素材は ENEX エクスポートで人間がリポジトリに橋渡しする．これにより whisper.cpp や Evernote API への依存を排し，利用者の準備コストを最小化する．
+文字起こしは Evernote 内蔵の機能を利用する．
+構造化は `generate_prompts.py` が生成したプロンプトを Evernote AI に投入して行う（3 段階）．
+素材は ENEX エクスポートで人間がリポジトリに橋渡しする．
+これにより whisper.cpp や Evernote API への依存を排し，利用者の準備コストを最小化する．
 
 ## 📂 リポジトリ構成と提供物
 
@@ -75,7 +82,12 @@ blog-pipeline/
 │  ├─ parse_enex.py           ENEX → Markdown（フロントマター付き）
 │  ├─ list_materials.py       素材一覧の取得
 │  ├─ build_dictionary.py     形態素解析で固有名詞辞書を更新
-│  └─ publish.py              AtomPub 投稿（常に下書き）
+│  ├─ publish.py              AtomPub 投稿（常に下書き）
+│  └─ prompt-maker/
+│     ├─ generate_prompts.py  Evernote AI プロンプト生成
+│     ├─ test_generate_prompts.py
+│     ├─ README.md
+│     └─ templates/           プロンプトテンプレート（3 段階）
 ├─ skill-templates/
 │  ├─ writing-style/          文体プロファイルを参照する Skill ひな形
 │  ├─ propose-articles/       テーマ横断の記事案生成 Skill ひな形
@@ -112,7 +124,9 @@ blog-pipeline/
 | 工程 | 担当 | モデル | 理由 |
 |---|---|---|---|
 | 音声録音と Evernote 添付 | 人間 | - | 既存習慣に載せる |
-| 文字起こしと構造化 | Evernote 内蔵 + Evernote AI | - | サードパーティサービスに委譲 |
+| 文字起こし | Evernote 内蔵 | - | サードパーティサービスに委譲 |
+| Evernote AI プロンプト生成 | スクリプト（`generate_prompts.py`）| - | 決定論的 |
+| Evernote AI 構造化 | Evernote AI | - | サードパーティサービスに委譲 |
 | ENEX エクスポート | 人間 | - | API 申請を回避するための橋渡し |
 | ENML → Markdown 変換 | スクリプト（`parse_enex.py`）| - | 決定論的 |
 | 文字起こし校正（固有名詞補正）| Subagent | Sonnet または Haiku | 辞書照合と文脈判断のミックス |

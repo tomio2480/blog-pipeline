@@ -12,3 +12,6 @@ materials/corrected/[0-9]*.md
 # agent-templates はですます調で書く方針のため textlint 対象外
 # （CLAUDE.md「文体の使い分け」を参照）
 agent-templates/**
+# prompt-maker/templates はEvernote AI への指示プロンプトのため textlint 対象外
+# （ですます調で書く指示書き形式のため，ドキュメントの lint ルールとは別扱い）
+scripts/prompt-maker/templates/**
