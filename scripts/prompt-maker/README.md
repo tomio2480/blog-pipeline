@@ -1,5 +1,14 @@
 # Evernote AI 文字起こし整理プロンプト生成 CLI
 
+> **非推奨（Deprecated）**
+>
+> 本スクリプトは 2026-06-12 の設計見直しにより非推奨となった．
+> Evernote AI による構造化を廃止し，構造化・リンク整理・固有名詞校閲の役割を
+> `blog-private` 側の Claude Subagent
+> （`transcript-corrector` / `article-proposer` / `article-drafter`）へ吸収した．
+> 3 種プロンプトの貼り付け往復という人間コストが節約効果に見合わないと判断した．
+> スクリプトとテンプレートは設計経緯の参照のため残置する．
+
 Evernote AI へ投入するプロンプトを，セッション識別子から自動生成する Python CLI．
 3 段階に分けた Markdown テンプレートへ値を埋め込み，識別子と同名のフォルダへ書き出す．
 

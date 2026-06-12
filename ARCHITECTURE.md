@@ -42,13 +42,9 @@
     ↓
 [Evernote 内蔵文字起こし]
     ↓
-[scripts/prompt-maker/generate_prompts.py]  Evernote AI プロンプト生成
-    ↓
-[Evernote AI 構造化（3 段階プロンプト投入）]
-    ↓
 [人間 ENEX エクスポート]
     ↓
-[parse_enex.py]  ENML → Markdown，メタ情報抽出
+[parse_enex.py]  ENML → Markdown，メタ情報抽出（2 セクション構成）
     ↓
 [materials/raw/*.md]
     ↓
@@ -70,7 +66,8 @@
 ```
 
 文字起こしは Evernote 内蔵の機能を利用する．
-構造化は `generate_prompts.py` が生成したプロンプトを Evernote AI に投入して行う（3 段階）．
+構造化・リンク整理・固有名詞校閲は `blog-private` 側の Claude Subagent が担当する．
+`generate_prompts.py` による Evernote AI への 3 段階プロンプト投入は 2026-06-12 に廃止した．
 素材は ENEX エクスポートで人間がリポジトリに橋渡しする．
 これにより whisper.cpp や Evernote API への依存を排し，利用者の準備コストを最小化する．
 
@@ -84,7 +81,7 @@ blog-pipeline/
 │  ├─ build_dictionary.py     形態素解析で固有名詞辞書を更新
 │  ├─ publish.py              AtomPub 投稿（常に下書き）
 │  └─ prompt-maker/
-│     ├─ generate_prompts.py  Evernote AI プロンプト生成
+│     ├─ generate_prompts.py  Evernote AI プロンプト生成（非推奨，2026-06-12 廃止）
 │     ├─ test_generate_prompts.py
 │     ├─ README.md
 │     └─ templates/           プロンプトテンプレート（3 段階）
