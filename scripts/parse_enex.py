@@ -212,11 +212,13 @@ def extract_transcription(en_media_style: str) -> tuple[str, str, list[str]]:
     # currentState スキーマ（実 ENEX 形式）を優先，なければ旧形式にフォールバック
     current_state = data.get("currentState")
     if isinstance(current_state, dict):
-        state = str(current_state.get("state", "absent"))
+        state_val = current_state.get("state")
         raw_languages = current_state.get("transcribedLanguages", [])
     else:
-        state = str(data.get("transcription_state", "absent"))
+        state_val = data.get("transcription_state")
         raw_languages = data.get("languages", [])
+    # キー不在と明示的な null をともに absent へ畳む（str(None) の "None" 漏れ防止）
+    state = str(state_val) if state_val is not None else "absent"
 
     languages = (
         [str(lang) for lang in raw_languages if lang is not None]

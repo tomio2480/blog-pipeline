@@ -243,6 +243,35 @@ def test_extract_transcription_real_format_dict_with_current_state() -> None:
     assert langs == ["ja"]
 
 
+def test_extract_transcription_real_format_null_state_returns_absent() -> None:
+    """currentState.state が明示的に null の場合は "None" ではなく absent を返すこと．"""
+    style = (
+        '--en-transcription:{"currentState":{"state":null,'
+        '"transcribedLanguages":["ja"]},"segments":[]};'
+    )
+    _, state, _ = extract_transcription(style)
+    assert state == "absent"
+
+
+def test_extract_transcription_legacy_null_state_returns_absent() -> None:
+    """旧形式の transcription_state が明示的に null でも absent を返すこと．"""
+    style = '--en-transcription:{"transcription_state":null,"segments":[]};'
+    _, state, _ = extract_transcription(style)
+    assert state == "absent"
+
+
+def test_extract_transcription_null_languages_returns_empty_list() -> None:
+    """transcribedLanguages が明示的に null でも languages は空リストになること．"""
+    style = (
+        '--en-transcription:{"currentState":{"state":"transcribed",'
+        '"transcribedLanguages":null},"segments":[{"text":"発話"}]};'
+    )
+    text, state, langs = extract_transcription(style)
+    assert text == "発話"
+    assert state == "transcribed"
+    assert langs == []
+
+
 def test_extract_transcription_real_format_invalid_string_returns_absent() -> None:
     """二段デコードに失敗する不正文字列は ("", "absent", []) を返すこと．"""
     style = '--en-transcription:"not json";'
