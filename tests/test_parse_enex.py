@@ -211,6 +211,47 @@ def test_extract_transcription_handles_brace_inside_string() -> None:
     assert langs == ["ja"]
 
 
+# ---------- extract_transcription：実 ENEX 形式（currentState スキーマ）----------
+
+
+def test_extract_transcription_real_format_json_string_wrapped() -> None:
+    """JSON 文字列ラップ＋currentState スキーマで text/state/languages が取れること．"""
+    inner = (
+        '{"currentState":{"state":"transcribed","transcribedLanguages":["ja"]},'
+        '"segments":[{"text":"こんにちは"},{"text":"架空の発話"}]}'
+    )
+    import json as _json
+    wrapped = _json.dumps(inner)  # 二重エンコード: '"{\\"currentState\\":...}"'
+    style = f"--en-transcription:{wrapped};"
+    text, state, langs = extract_transcription(style)
+    assert "こんにちは" in text
+    assert "架空の発話" in text
+    assert state == "transcribed"
+    assert langs == ["ja"]
+
+
+def test_extract_transcription_real_format_dict_with_current_state() -> None:
+    """ラップなし dict でも currentState スキーマが読めること．"""
+    style = (
+        '--en-transcription:{"currentState":{"state":"transcribed",'
+        '"transcribedLanguages":["ja"]},'
+        '"segments":[{"text":"テスト発話"}]};'
+    )
+    text, state, langs = extract_transcription(style)
+    assert "テスト発話" in text
+    assert state == "transcribed"
+    assert langs == ["ja"]
+
+
+def test_extract_transcription_real_format_invalid_string_returns_absent() -> None:
+    """二段デコードに失敗する不正文字列は ("", "absent", []) を返すこと．"""
+    style = '--en-transcription:"not json";'
+    text, state, langs = extract_transcription(style)
+    assert text == ""
+    assert state == "absent"
+    assert langs == []
+
+
 def test_enml_nested_emphasis_preserved() -> None:
     enml = "<p>before<b>bold <i>italic</i></b>after</p>"
     out = enml_to_markdown(enml)
@@ -678,3 +719,31 @@ def test_multi_note_sample_created_dates_differ(multi_notes: list[Note]) -> None
     """3 件の note の created 日時が全て異なる．"""
     created_dates = [note.created for note in multi_notes]
     assert len(set(created_dates)) == 3
+
+
+# ---------- 統合テスト：実 ENEX 形式 real-transcription-sample.enex ----------
+
+
+@pytest.fixture(scope="module")
+def real_transcription_note() -> Note:
+    notes = list(parse_enex(FIXTURES / "real-transcription-sample.enex"))
+    assert len(notes) == 1
+    return notes[0]
+
+
+def test_real_transcription_state_is_transcribed(real_transcription_note: Note) -> None:
+    """実 ENEX 形式フィクスチャの transcription_state が 'transcribed' であること．"""
+    assert real_transcription_note.transcription_state == "transcribed"
+
+
+def test_real_transcription_languages_is_ja(real_transcription_note: Note) -> None:
+    """実 ENEX 形式フィクスチャの languages が ["ja"] であること．"""
+    assert real_transcription_note.languages == ["ja"]
+
+
+def test_real_transcription_text_contains_expected_phrases(
+    real_transcription_note: Note,
+) -> None:
+    """実 ENEX 形式フィクスチャの raw_transcription に期待文言が含まれること．"""
+    assert "架空の発話テスト一" in real_transcription_note.raw_transcription
+    assert "架空の発話テスト二" in real_transcription_note.raw_transcription

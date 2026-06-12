@@ -172,8 +172,18 @@ def write_notes(notes: Iterable[Note], output_dir: Path) -> list[Path]:
 def extract_transcription(en_media_style: str) -> tuple[str, str, list[str]]:
     """`--en-transcription` JSON から (連結テキスト, 状態, languages) を返す．
 
-    json.JSONDecoder().raw_decode() を使い，先頭から有効な JSON オブジェクトのみを
-    切り出す．JSON 文字列値内に `}` が含まれる場合も誤って切断しない．
+    json.JSONDecoder().raw_decode() を使い，先頭から有効な JSON 値のみを切り出す．
+    JSON 文字列値内に `}` が含まれる場合も誤って切断しない．
+
+    実 ENEX 形式では値が JSON 文字列でラップされている場合がある
+    （例: `"{\\"currentState\\":...}"` 形式）．raw_decode の戻り値が str の場合は
+    json.loads でもう 1 段デコードする．
+
+    スキーマ優先順位：
+    1. `currentState.state` / `currentState.transcribedLanguages`（実 ENEX 形式）
+    2. トップレベルの `transcription_state` / `languages`（旧形式・フォールバック）
+
+    いずれのデコードにも失敗した場合は ("", "absent", []) を返す．
     """
     if not en_media_style:
         return "", "absent", []
@@ -183,13 +193,31 @@ def extract_transcription(en_media_style: str) -> tuple[str, str, list[str]]:
         return "", "absent", []
     rest = en_media_style[idx + len(marker):].lstrip()
     try:
-        data, _ = json.JSONDecoder().raw_decode(rest)
+        parsed, _ = json.JSONDecoder().raw_decode(rest)
     except json.JSONDecodeError:
         return "", "absent", []
+
+    # 二段デコード：raw_decode の戻り値が str の場合（JSON 文字列ラップ形式）
+    if isinstance(parsed, str):
+        try:
+            data = json.loads(parsed)
+        except json.JSONDecodeError:
+            return "", "absent", []
+    else:
+        data = parsed
+
     if not isinstance(data, dict):
         return "", "absent", []
-    state = str(data.get("transcription_state", "absent"))
-    raw_languages = data.get("languages", [])
+
+    # currentState スキーマ（実 ENEX 形式）を優先，なければ旧形式にフォールバック
+    current_state = data.get("currentState")
+    if isinstance(current_state, dict):
+        state = str(current_state.get("state", "absent"))
+        raw_languages = current_state.get("transcribedLanguages", [])
+    else:
+        state = str(data.get("transcription_state", "absent"))
+        raw_languages = data.get("languages", [])
+
     languages = (
         [str(lang) for lang in raw_languages if lang is not None]
         if isinstance(raw_languages, list)
