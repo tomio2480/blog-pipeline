@@ -119,7 +119,7 @@ def note_to_markdown(note: Note) -> str:
         parts.append(SECTION_AI_STRUCTURED)
         parts.append("")
         ai_md = enml_to_markdown(note.ai_structured_enml)
-        if ai_md:
+        if ai_md.strip():
             parts.append(ai_md)
         else:
             parts.append(EMPTY_AI_PLACEHOLDER)

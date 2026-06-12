@@ -59,6 +59,9 @@ def test_happy_transcription_extracted(happy_note: Note) -> None:
 def test_happy_markdown_three_sections_order(happy_note: Note) -> None:
     """h1 ありノート（旧ノート）は 人間メモ → 🤖 AI 構造化 → 生の文字起こし の順で出力する．"""
     md = note_to_markdown(happy_note)
+    assert "## 🗒️ 人間メモ（音声添付の後に書かれたもの）" in md
+    assert "## 🤖 Evernote AI 構造化情報" in md
+    assert "## 🗣️ 生の文字起こし" in md
     h1 = md.find("## 🗒️ 人間メモ（音声添付の後に書かれたもの）")
     h2 = md.find("## 🤖 Evernote AI 構造化情報")
     h3 = md.find("## 🗣️ 生の文字起こし")
@@ -513,6 +516,8 @@ def test_no_h1_yields_two_sections_only(tmp_path: Path) -> None:
     path = _write_enex(tmp_path, enex)
     note = next(parse_enex(path))
     md = note_to_markdown(note)
+    assert "## 🗒️ 人間メモ（音声添付の後に書かれたもの）" in md
+    assert "## 🗣️ 生の文字起こし" in md
     human_memo_pos = md.find("## 🗒️ 人間メモ（音声添付の後に書かれたもの）")
     transcription_pos = md.find("## 🗣️ 生の文字起こし")
     assert human_memo_pos > 0
