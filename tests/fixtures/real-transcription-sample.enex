@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-export SYSTEM "http://xml.evernote.com/pub/evernote-export4.dtd">
+<en-export export-date="20260613T000000Z" application="Evernote" version="10.0">
+  <note>
+    <title>架空パイロット録音メモ</title>
+    <content><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE en-note SYSTEM "http://xml.evernote.com/pub/enml2.dtd">
+<en-note>
+<en-media style="--en-transcription:&quot;{\&quot;currentState\&quot;:{\&quot;state\&quot;:\&quot;transcribed\&quot;,\&quot;transcribedLanguages\&quot;:[\&quot;ja\&quot;]},\&quot;segments\&quot;:[{\&quot;text\&quot;:\&quot;架空の発話テスト一\&quot;},{\&quot;text\&quot;:\&quot;架空の発話テスト二\&quot;}]}&quot;;" hash="def1234567890abcdef1234567890abcd" type="audio/mp4"/>
+<div>架空のメモ本文．</div>
+</en-note>]]></content>
+    <created>20260613T100000Z</created>
+    <updated>20260613T100000Z</updated>
+    <tag>架空タグC</tag>
+    <note-attributes>
+      <author>bob</author>
+    </note-attributes>
+    <resource>
+      <data encoding="base64">AAECAwQFBgcICQoL</data>
+      <mime>audio/mp4</mime>
+      <resource-attributes>
+        <file-name>pilot.m4a</file-name>
+      </resource-attributes>
+    </resource>
+  </note>
+</en-export>
