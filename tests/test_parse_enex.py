@@ -57,8 +57,12 @@ def test_happy_transcription_extracted(happy_note: Note) -> None:
 
 
 def test_happy_markdown_three_sections_order(happy_note: Note) -> None:
+    """h1 ありノート（旧ノート）は 人間メモ → 🤖 AI 構造化 → 生の文字起こし の順で出力する．"""
     md = note_to_markdown(happy_note)
-    h1 = md.find("## 🗒️ 人間メモ")
+    assert "## 🗒️ 人間メモ（音声添付の後に書かれたもの）" in md
+    assert "## 🤖 Evernote AI 構造化情報" in md
+    assert "## 🗣️ 生の文字起こし" in md
+    h1 = md.find("## 🗒️ 人間メモ（音声添付の後に書かれたもの）")
     h2 = md.find("## 🤖 Evernote AI 構造化情報")
     h3 = md.find("## 🗣️ 生の文字起こし")
     assert 0 < h1 < h2 < h3
@@ -86,7 +90,7 @@ def test_happy_markdown_frontmatter_yaml_shape(happy_note: Note) -> None:
 
 def test_happy_markdown_human_memo_links(happy_note: Note) -> None:
     md = note_to_markdown(happy_note)
-    memo_start = md.index("## 🗒️ 人間メモ")
+    memo_start = md.index("## 🗒️ 人間メモ（音声添付の後に書かれたもの）")
     ai_start = md.index("## 🤖 Evernote AI 構造化情報")
     memo = md[memo_start:ai_start]
     assert "[イベントページ](https://example.com/event)" in memo
@@ -98,6 +102,7 @@ def test_happy_markdown_ai_structured(happy_note: Note) -> None:
     ai_start = md.index("## 🤖 Evernote AI 構造化情報")
     transcription_start = md.index("## 🗣️ 生の文字起こし")
     ai = md[ai_start:transcription_start]
+
     assert "# 登壇のテーマ" in ai
     assert "## 導入" in ai
     assert "## 本論" in ai
@@ -496,7 +501,11 @@ def test_no_transcription_yields_absent_state(tmp_path: Path) -> None:
     assert note.attachments == []
 
 
-def test_no_h1_yields_empty_ai_section(tmp_path: Path) -> None:
+def test_no_h1_yields_two_sections_only(tmp_path: Path) -> None:
+    """h1 なし（新規ノート）は 人間メモ・生の文字起こしの 2 セクションのみ出力する．
+
+    🤖 Evernote AI 構造化情報 見出しと（構造化情報なし）プレースホルダは出力しない．
+    """
     body = (
         '<en-note>'
         '<en-media style="--en-transcription:{&quot;segments&quot;:[{&quot;text&quot;:&quot;a&quot;}],&quot;transcription_state&quot;:&quot;transcribed&quot;,&quot;languages&quot;:[&quot;ja&quot;]};" hash="hhh" type="audio/mp4"/>'
@@ -507,11 +516,14 @@ def test_no_h1_yields_empty_ai_section(tmp_path: Path) -> None:
     path = _write_enex(tmp_path, enex)
     note = next(parse_enex(path))
     md = note_to_markdown(note)
-    ai_start = md.index("## 🤖 Evernote AI 構造化情報")
-    transcription_start = md.index("## 🗣️ 生の文字起こし")
-    ai = md[ai_start:transcription_start].strip()
-    body_only = ai.removeprefix("## 🤖 Evernote AI 構造化情報").strip()
-    assert body_only == "（構造化情報なし）"
+    assert "## 🗒️ 人間メモ（音声添付の後に書かれたもの）" in md
+    assert "## 🗣️ 生の文字起こし" in md
+    human_memo_pos = md.find("## 🗒️ 人間メモ（音声添付の後に書かれたもの）")
+    transcription_pos = md.find("## 🗣️ 生の文字起こし")
+    assert human_memo_pos > 0
+    assert transcription_pos > human_memo_pos
+    assert "## 🤖 Evernote AI 構造化情報" not in md
+    assert "（構造化情報なし）" not in md
 
 
 def test_multiple_en_media_collected(tmp_path: Path) -> None:

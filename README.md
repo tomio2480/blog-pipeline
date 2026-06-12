@@ -76,27 +76,13 @@ pip install -e ".[dev]"
 pip install pytest
 ```
 
-### `generate_prompts.py` の使い方
+### `generate_prompts.py` の使い方（非推奨）
 
-Evernote AI に投入する構造化プロンプトを 3 段階分生成する．
+> **非推奨．** 2026-06-12 の設計見直しで Evernote AI 構造化を廃止したため，
+> 本スクリプトは使用しない．詳細は `scripts/prompt-maker/README.md` を参照すること．
 
-```bash
-python scripts/prompt-maker/generate_prompts.py "2026-05-21-セッション名"
-```
-
-セッション識別子を渡すと，同名のディレクトリへ 3 ファイルが生成される．
-
-```
-2026-05-21-セッション名/
-├── 01_structure.md     # 文字起こし構造化プロンプト
-├── 02_links.md         # リンク整理・提案プロンプト
-└── 03_proper_nouns.md  # 固有名詞校閲プロンプト
-```
-
-生成したファイルを順に Evernote AI のチャットへ貼り付ける．
-各段階は別チャットで実行することを推奨する（Evernote AI のチャット長制限を回避するため）．
-
-詳細は `scripts/prompt-maker/README.md` を参照すること．
+Evernote AI に投入する構造化プロンプトを 3 段階分生成する CLI である．
+スクリプトとテンプレートは設計経緯の参照のため残置する．
 
 ### `parse_enex.py` の使い方
 
@@ -106,7 +92,11 @@ ENEX ファイルを Markdown へ変換する．
 python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
 ```
 
-出力は 1 ノート 1 ファイルで，フロントマター付き Markdown となる．3 セクション構成（🗒️ 人間メモ／🤖 Evernote AI 構造化情報／🗣️ 生の文字起こし）．ENEX 内の音声 base64 データは出力に含めない．
+出力は 1 ノート 1 ファイルで，フロントマター付き Markdown となる．
+原則 2 セクション構成（🗒️ 人間メモ／🗣️ 生の文字起こし）で出力する．
+`<h1>` を含む旧ノートは互換として
+🤖 Evernote AI 構造化情報セクションを人間メモと生の文字起こしの間に追加出力する（3 セクション構成）．
+ENEX 内の音声 base64 データは出力に含めない．
 
 ### `build_dictionary.py` の使い方
 
