@@ -11,8 +11,10 @@
   実 ENEX は 1 ノート 30MB 程度であり実害軽微として iterparse 方式を採用する．
 - 出力ファイル名は NFC 正規化のうえ Windows 予約名・不正文字・末尾空白等を
   サニタイズし，最大 80 文字へ切り詰める．衝突時は `-2`，`-3` を付与する．
-- フロントマターは YAML で出力する．本文は 3 セクション構成
-  （人間メモ / Evernote AI 構造化情報 / 生の文字起こし）．
+- フロントマターは YAML で出力する．本文は原則 2 セクション構成
+  （人間メモ / 生の文字起こし）．
+  `<h1>` を含む旧ノートは互換として Evernote AI 構造化情報セクションを
+  人間メモと生の文字起こしの間に追加出力する（3 セクション構成）．
 
 使い方:
 
@@ -35,9 +37,9 @@ from typing import IO, Iterable, Iterator, Union
 
 
 SOURCE_NAME = "evernote"
-SECTION_HUMAN_MEMO = "## 🗒️ 人間メモ（音声と AI 構造化の間に書かれたもの）"
+SECTION_HUMAN_MEMO = "## 🗒️ 人間メモ（音声添付の後に書かれたもの）"
 SECTION_AI_STRUCTURED = "## 🤖 Evernote AI 構造化情報"
-SECTION_RAW_TRANSCRIPTION = "## 🗣️ 生の文字起こし（参考）"
+SECTION_RAW_TRANSCRIPTION = "## 🗣️ 生の文字起こし"
 EMPTY_AI_PLACEHOLDER = "（構造化情報なし）"
 MAX_FILENAME_STEM_LENGTH = 80
 WINDOWS_RESERVED_NAMES = {
@@ -98,7 +100,12 @@ def parse_enex(source: Source) -> Iterator[Note]:
 
 
 def note_to_markdown(note: Note) -> str:
-    """Note をフロントマター付き Markdown へ整形する．"""
+    """Note をフロントマター付き Markdown へ整形する．
+
+    h1 を含む旧ノートは 人間メモ／Evernote AI 構造化情報／生の文字起こし の
+    3 セクション構成とする（互換）．h1 を含まない新規ノートは
+    人間メモ／生の文字起こし の 2 セクション構成とする．
+    """
     parts: list[str] = [_yaml_frontmatter(note), ""]
 
     parts.append(SECTION_HUMAN_MEMO)
@@ -108,14 +115,15 @@ def note_to_markdown(note: Note) -> str:
         parts.append(memo_md)
         parts.append("")
 
-    parts.append(SECTION_AI_STRUCTURED)
-    parts.append("")
-    ai_md = enml_to_markdown(note.ai_structured_enml)
-    if ai_md:
-        parts.append(ai_md)
-    else:
-        parts.append(EMPTY_AI_PLACEHOLDER)
-    parts.append("")
+    if note.ai_structured_enml:
+        parts.append(SECTION_AI_STRUCTURED)
+        parts.append("")
+        ai_md = enml_to_markdown(note.ai_structured_enml)
+        if ai_md:
+            parts.append(ai_md)
+        else:
+            parts.append(EMPTY_AI_PLACEHOLDER)
+        parts.append("")
 
     parts.append(SECTION_RAW_TRANSCRIPTION)
     parts.append("")
