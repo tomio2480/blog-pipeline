@@ -40,8 +40,8 @@ for entry in (data.get(category) or []):
 
 ### 2. Windows 環境で `subprocess.run` の stdout が `cp932` で読まれる
 
-`gh api` を Python の `subprocess.run` 経由で呼び出し，stdout を text モードで
-読もうとすると，Windows ではデフォルトエンコーディングが `cp932` になる．
+`gh api` を Python の `subprocess.run` 経由で呼び出し，stdout を text モードで読む場合を考える．
+Windows ではデフォルトエンコーディングが `cp932` になる．
 GitHub API レスポンスは UTF-8 の JSON（日本語含む）のため
 `UnicodeDecodeError` が発生する．
 
@@ -53,8 +53,8 @@ GitHub API レスポンスは UTF-8 の JSON（日本語含む）のため
 エンコーディング問題を回避している．
 Python から直接 `subprocess` で `gh api` を組み立てない．
 
-**再発防止**: `tomio2480/settings#76` として起票し，CLAUDE.md または
-`github-dev` Skill にスクリプト使用を必須化する方針を記録した．
+**再発防止**: `tomio2480/settings#76` を起票した．
+CLAUDE.md または `github-dev` Skill にスクリプト使用を必須化する方針を記録した．
 
 ### 3. `load_vocabulary` のエラーハンドリングはファイル読み込み層で行う
 
