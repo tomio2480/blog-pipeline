@@ -3,6 +3,7 @@ inline ENEX 文字列を一時ファイルへ書き出して検証する．"""
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -220,8 +221,7 @@ def test_extract_transcription_real_format_json_string_wrapped() -> None:
         '{"currentState":{"state":"transcribed","transcribedLanguages":["ja"]},'
         '"segments":[{"text":"こんにちは"},{"text":"架空の発話"}]}'
     )
-    import json as _json
-    wrapped = _json.dumps(inner)  # 二重エンコード: '"{\\"currentState\\":...}"'
+    wrapped = json.dumps(inner)  # 二重エンコード: '"{\\"currentState\\":...}"'
     style = f"--en-transcription:{wrapped};"
     text, state, langs = extract_transcription(style)
     assert "こんにちは" in text
