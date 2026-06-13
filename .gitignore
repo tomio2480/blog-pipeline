@@ -35,6 +35,10 @@ materials/
 # 例外：合成 fixture（個人情報を含まない）はテスト用にコミットする
 !tests/fixtures/*.enex
 
+# prompt-maker の出力先が誤って blog-pipeline 内に落ちても commit されないようにする
+# （session_id にイベント名・人名等の固有名詞が含まれうるため．D2 運用では個人化版の cwd へ出力する）
+/[0-9][0-9][0-9][0-9]-*/
+
 # OS
 .DS_Store
 Thumbs.db
