@@ -97,6 +97,8 @@ def build_ffmpeg_command(input_path: Path, wav_path: Path) -> list[str]:
     """音声を 16kHz モノラルの PCM WAV へ変換する `ffmpeg` コマンドを組み立てる．"""
     return [
         "ffmpeg",
+        "-loglevel",
+        "error",
         "-i",
         str(input_path),
         "-ar",
@@ -135,6 +137,7 @@ def build_whisper_command(
         "-mc",
         "0",
         "-otxt",
+        "-np",
         "-of",
         str(output_stem),
     ]
@@ -230,7 +233,13 @@ def transcribe(
         prompt=prompt,
         language=language,
     )
-    if subprocess.run(whisper_cmd).returncode != 0:
+    try:
+        whisper_result = subprocess.run(whisper_cmd)
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            f"whisper-cli が見つかりません．パスを確認してください: {whisper_cli}"
+        ) from exc
+    if whisper_result.returncode != 0:
         raise RuntimeError(f"whisper.cpp による文字起こしに失敗しました: {audio_path}")
 
     return output_dir / f"{stem}.txt"
@@ -274,6 +283,12 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if not args.vocabulary.exists() or not args.vocabulary.is_file():
         print(f"辞書ファイルが見つかりません: {args.vocabulary}", file=sys.stderr)
+        return 2
+
+    # 明示指定した --env-file が存在しないときは黙ってフォールバックせず知らせる．
+    # 既定の .env は存在しなくても許容する．
+    if args.env_file != Path(".env") and not args.env_file.exists():
+        print(f"環境ファイルが見つかりません: {args.env_file}", file=sys.stderr)
         return 2
 
     # os.environ を .env より優先する（publish.py と同じ規約）．

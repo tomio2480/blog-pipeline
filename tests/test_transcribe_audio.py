@@ -109,6 +109,12 @@ def test_build_ffmpeg_command_overwrites_without_prompting() -> None:
     assert "-y" in cmd
 
 
+def test_build_ffmpeg_command_suppresses_banner_noise() -> None:
+    cmd = build_ffmpeg_command(Path("in.m4a"), Path("out.wav"))
+    # コンソールを埋めるバナー出力を抑え，エラー時のみログを出す
+    assert "-loglevel" in cmd and cmd[cmd.index("-loglevel") + 1] == "error"
+
+
 # ---------- build_whisper_command ----------
 
 
@@ -130,6 +136,8 @@ def test_build_whisper_command_uses_standard_flags() -> None:
     # テキスト出力と出力先 stem
     assert "-otxt" in cmd
     assert "-of" in cmd and cmd[cmd.index("-of") + 1] == str(Path("/out/audio"))
+    # 結果以外のコンソール出力を抑制する（whisper-cli に --quiet は無いため -np）
+    assert "-np" in cmd
     # 辞書語を初期プロンプトへ注入する
     assert "--prompt" in cmd and cmd[cmd.index("--prompt") + 1] == "旭川、函館"
 
@@ -349,6 +357,68 @@ def test_transcribe_raises_friendly_error_when_ffmpeg_not_installed(
         )
 
 
+def test_transcribe_raises_friendly_error_when_whisper_not_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # whisper-cli が見つからない場合の FileNotFoundError も
+    # 分かりやすい RuntimeError へ変換する（ffmpeg と対称）
+    audio = tmp_path / "a.m4a"
+    audio.write_bytes(b"x")
+    vocab = tmp_path / "vocabulary.yml"
+    vocab.write_text("version: 1\n", encoding="utf-8")
+    cli = tmp_path / "whisper-cli.exe"
+    cli.write_bytes(b"x")
+    model = tmp_path / "m.bin"
+    model.write_bytes(b"x")
+
+    def fake_run(cmd, **kwargs):
+        if "ffmpeg" in str(cmd[0]):
+            class _Result:
+                returncode = 0
+
+            return _Result()
+        raise FileNotFoundError("whisper-cli")
+
+    monkeypatch.setattr("transcribe_audio.subprocess.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="whisper-cli が見つかりません"):
+        transcribe(
+            audio_path=audio,
+            vocabulary_path=vocab,
+            output_dir=tmp_path / "out",
+            whisper_cli=cli,
+            whisper_model=model,
+            language="ja",
+        )
+
+
+def test_main_returns_2_when_explicit_env_file_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # 明示指定した --env-file が存在しない場合は，黙って os.environ に
+    # フォールバックせず，ファイル不在を明示エラーで知らせる
+    audio = tmp_path / "a.m4a"
+    audio.write_bytes(b"x")
+    vocab = tmp_path / "vocabulary.yml"
+    vocab.write_text("version: 1\n", encoding="utf-8")
+    monkeypatch.setenv("WHISPER_CLI_PATH", str(tmp_path / "whisper-cli.exe"))
+    monkeypatch.setenv("WHISPER_MODEL_PATH", str(tmp_path / "m.bin"))
+
+    code = main(
+        [
+            "--audio",
+            str(audio),
+            "--vocabulary",
+            str(vocab),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--env-file",
+            str(tmp_path / "typo.env"),
+        ]
+    )
+    assert code == 2
+
+
 def test_main_returns_1_when_transcribe_raises_oserror(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -414,6 +484,8 @@ def test_main_returns_2_when_env_unset(
     vocab.write_text("version: 1\n", encoding="utf-8")
     monkeypatch.delenv("WHISPER_CLI_PATH", raising=False)
     monkeypatch.delenv("WHISPER_MODEL_PATH", raising=False)
+    # 既定の .env（不在は許容）のまま，環境変数が未設定の経路を試す
+    monkeypatch.chdir(tmp_path)
     code = main(
         [
             "--audio",
@@ -422,8 +494,6 @@ def test_main_returns_2_when_env_unset(
             str(vocab),
             "--output-dir",
             str(tmp_path / "out"),
-            "--env-file",
-            str(tmp_path / "absent.env"),
         ]
     )
     assert code == 2
