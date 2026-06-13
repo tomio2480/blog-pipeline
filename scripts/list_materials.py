@@ -57,6 +57,49 @@ def _dequote_list_element(item_val: str) -> str:
     return item_val
 
 
+def _split_inline_array(inner: str) -> list[str]:
+    """インライン配列の中身をクォート状態を考慮して要素分割する．
+
+    クォート外のカンマだけを要素境界とする．ダブルクォート内は ``\\`` を
+    直後 1 文字のエスケープとして扱い ``\\"`` で閉じない．シングルクォート内は
+    エスケープ処理せず次の ``'`` までを 1 要素とみなす．クォートの除去と
+    エスケープ解釈は後段の :func:`_dequote_list_element` に委ねるため，
+    各要素はクォート文字を含んだまま返す．
+    """
+    elements: list[str] = []
+    current: list[str] = []
+    in_double = False
+    in_single = False
+    escaped = False
+    for ch in inner:
+        if escaped:
+            current.append(ch)
+            escaped = False
+        elif in_double:
+            current.append(ch)
+            if ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_double = False
+        elif in_single:
+            current.append(ch)
+            if ch == "'":
+                in_single = False
+        elif ch == '"':
+            current.append(ch)
+            in_double = True
+        elif ch == "'":
+            current.append(ch)
+            in_single = True
+        elif ch == ",":
+            elements.append("".join(current))
+            current = []
+        else:
+            current.append(ch)
+    elements.append("".join(current))
+    return elements
+
+
 def _parse_simple_yaml(text: str) -> dict[str, Any]:
     """ネスト無し・コメント無視の限定 YAML パーサ．
 
@@ -107,7 +150,7 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
             # インライン配列表記: ["tagA", "tagB"] または [a, b]
             inner = raw_val.strip("[]")
             items_inline: list[str] = []
-            for item_raw in inner.split(","):
+            for item_raw in _split_inline_array(inner):
                 item_raw = item_raw.strip()
                 if not item_raw:
                     continue

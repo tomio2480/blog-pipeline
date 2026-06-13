@@ -593,3 +593,62 @@ def test_block_list_element_with_trailing_data_is_not_truncated() -> None:
     assert result["auto_tags"] == ['"foo"bar'], (
         f"閉じクォート後の余分なデータが切り捨てられた: {result['auto_tags']!r}"
     )
+
+
+# ---------- Issue #36: インライン配列のクォート内カンマ ----------
+
+
+def test_inline_array_double_quoted_element_with_comma_not_split() -> None:
+    """ダブルクォート内のカンマを要素境界として誤分割しない（Issue #36）．
+    tags: ["a,b", "c"] → ['a,b', 'c'] になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'tags: ["a,b", "c"]'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ["a,b", "c"], (
+        f"ダブルクォート内のカンマで誤分割された: {result['tags']!r}"
+    )
+
+
+def test_inline_array_single_quoted_element_with_comma_not_split() -> None:
+    """シングルクォート内のカンマを要素境界として誤分割しない（Issue #36）．
+    tags: ['a,b'] → ['a,b'] になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = "tags: ['a,b']"
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ["a,b"], (
+        f"シングルクォート内のカンマで誤分割された: {result['tags']!r}"
+    )
+
+
+def test_inline_array_escaped_quote_then_comma_splits_correctly() -> None:
+    """エスケープ済みクォートを閉じと誤認せず，後続のクォート外カンマで分割する（Issue #36）．
+    tags: ["a\\"b", "c,d"] → ['a"b', 'c,d'] になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'tags: ["a\\"b", "c,d"]'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ['a"b', "c,d"], (
+        f"エスケープ済みクォートとクォート内カンマの解析に失敗した: {result['tags']!r}"
+    )
+
+
+def test_inline_array_unquoted_elements_still_split_on_comma() -> None:
+    """クォートなし要素は従来どおりカンマで分割される（Issue #36 の回帰防止）．
+    tags: [a, b, c] → ['a', 'b', 'c'] になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = "tags: [a, b, c]"
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ["a", "b", "c"], (
+        f"クォートなし要素の分割が壊れた: {result['tags']!r}"
+    )
