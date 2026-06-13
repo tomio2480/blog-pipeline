@@ -14,6 +14,7 @@ from build_material import (
     Material,
     build_material,
     derive_created,
+    main,
     material_to_markdown,
     parse_memo,
     write_material,
@@ -57,14 +58,14 @@ def test_parse_memo_frontmatter_only_has_empty_body() -> None:
 def test_parse_memo_raises_on_malformed_frontmatter() -> None:
     # インデント不正で YAML パースに失敗する例．無言で本文扱いにせず明示エラーとする
     text = "---\ntags: [PHP\n  bad: : :\n---\n\n本文．"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="フロントマターが不正"):
         parse_memo(text)
 
 
 def test_parse_memo_raises_when_frontmatter_is_not_mapping() -> None:
     # フロントマターがスカラ（マッピングでない）の場合も明示エラーとする
     text = "---\nただの文字列\n---\n\n本文．"
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="マッピングである必要があります"):
         parse_memo(text)
 
 
@@ -77,6 +78,11 @@ def test_derive_created_from_date_prefix() -> None:
 
 def test_derive_created_returns_empty_without_date_prefix() -> None:
     assert derive_created("録音メモ") == ""
+
+
+def test_derive_created_returns_empty_for_invalid_calendar_date() -> None:
+    # 正規表現は通るが暦上存在しない日付（13 月 40 日）は空文字へフォールバックする
+    assert derive_created("2026-13-40-無効日付") == ""
 
 
 # ---------- build_material: メタデータ解決 ----------
@@ -147,9 +153,9 @@ def test_build_material_author_null_by_default() -> None:
 
 
 def test_build_material_author_from_memo_frontmatter() -> None:
-    memo = '---\nauthor: "Shota Nishihara"\n---\n\n本文．'
+    memo = '---\nauthor: "Example Author"\n---\n\n本文．'
     material = build_material("2026-04-28-登壇メモ", memo, "文字起こし．")
-    assert material.author == "Shota Nishihara"
+    assert material.author == "Example Author"
 
 
 def test_build_material_keeps_memo_body_verbatim() -> None:
@@ -163,7 +169,7 @@ def test_build_material_keeps_memo_body_verbatim() -> None:
 
 @pytest.fixture
 def sample_markdown() -> str:
-    memo = '---\ntags: ["PHP"]\nauthor: "Shota Nishihara"\n---\n\nfortee のリンク．'
+    memo = '---\ntags: ["PHP"]\nauthor: "Example Author"\n---\n\nfortee のリンク．'
     material = build_material("2026-04-28-登壇メモ", memo, "こんにちは．登壇しました．")
     return material_to_markdown(material)
 
@@ -221,3 +227,22 @@ def test_write_material_overwrites_existing(tmp_path: Path) -> None:
     content = second.read_text(encoding="utf-8")
     assert "再生成本文．" in content
     assert "初回本文．" not in content
+
+
+# ---------- CLI (main) ----------
+
+
+def test_main_returns_2_when_memo_is_a_directory(tmp_path: Path) -> None:
+    # ディレクトリを --memo に渡しても read_text のクラッシュではなく終了コード 2 を返す
+    memo_dir = tmp_path / "memo_dir"
+    memo_dir.mkdir()
+    transcription = tmp_path / "transcription.txt"
+    transcription.write_text("文字起こし．", encoding="utf-8")
+
+    exit_code = main([
+        "--memo", str(memo_dir),
+        "--transcription", str(transcription),
+        "--output-dir", str(tmp_path / "out"),
+    ])
+
+    assert exit_code == 2

@@ -27,6 +27,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 
 import yaml
@@ -89,12 +90,18 @@ def parse_memo(text: str) -> tuple[dict, str]:
 def derive_created(stem: str) -> str:
     """ファイル名 stem の先頭 `YYYY-MM-DD` から ISO 日時を導出する．
 
-    日付プレフィックスを持たない場合は空文字を返す．
+    日付プレフィックスを持たない場合，または暦上存在しない日付
+    （例 `2026-13-40`）の場合は空文字を返す．
     """
     match = _DATE_PREFIX_PATTERN.match(stem)
     if not match:
         return ""
-    return f"{match.group(1)}T00:00:00Z"
+    yyyy_mm_dd = match.group(1)
+    try:
+        date.fromisoformat(yyyy_mm_dd)
+    except ValueError:
+        return ""
+    return f"{yyyy_mm_dd}T00:00:00Z"
 
 
 def build_material(stem: str, memo_text: str, transcription_text: str) -> Material:
@@ -240,6 +247,9 @@ def main(argv: list[str] | None = None) -> int:
     for label, path in (("人間メモ", args.memo), ("文字起こし", args.transcription)):
         if not path.exists():
             print(f"{label}ファイルが見つかりません: {path}", file=sys.stderr)
+            return 2
+        if not path.is_file():
+            print(f"{label}が通常ファイルではありません: {path}", file=sys.stderr)
             return 2
 
     stem = args.memo.stem
