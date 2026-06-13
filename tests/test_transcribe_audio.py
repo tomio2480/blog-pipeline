@@ -69,6 +69,14 @@ def test_load_prompt_words_raises_when_not_mapping(tmp_path: Path) -> None:
         load_prompt_words(vocab)
 
 
+def test_load_prompt_words_raises_on_malformed_yaml(tmp_path: Path) -> None:
+    # YAML 解析失敗を無言クラッシュさせず，パスを含む ValueError へ変換する
+    vocab = tmp_path / "vocabulary.yml"
+    vocab.write_text("places: [unterminated\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="読み込みまたは解析に失敗"):
+        load_prompt_words(vocab)
+
+
 def test_load_prompt_words_deduplicates_preserving_order(tmp_path: Path) -> None:
     vocab = tmp_path / "vocabulary.yml"
     vocab.write_text(
@@ -309,6 +317,73 @@ def test_transcribe_raises_when_ffmpeg_fails(
             whisper_model=model,
             language="ja",
         )
+
+
+def test_transcribe_raises_friendly_error_when_ffmpeg_not_installed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # ffmpeg 未インストール（PATH 上に無い）時の FileNotFoundError を
+    # 分かりやすい RuntimeError へ変換する
+    audio = tmp_path / "a.m4a"
+    audio.write_bytes(b"x")
+    vocab = tmp_path / "vocabulary.yml"
+    vocab.write_text("version: 1\n", encoding="utf-8")
+    cli = tmp_path / "whisper-cli.exe"
+    cli.write_bytes(b"x")
+    model = tmp_path / "m.bin"
+    model.write_bytes(b"x")
+
+    def fake_run(cmd, **kwargs):
+        raise FileNotFoundError("ffmpeg")
+
+    monkeypatch.setattr("transcribe_audio.subprocess.run", fake_run)
+
+    with pytest.raises(RuntimeError, match="ffmpeg が見つかりません"):
+        transcribe(
+            audio_path=audio,
+            vocabulary_path=vocab,
+            output_dir=tmp_path / "out",
+            whisper_cli=cli,
+            whisper_model=model,
+            language="ja",
+        )
+
+
+def test_main_returns_1_when_transcribe_raises_oserror(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # I/O 由来の OSError でもスタックトレースを出さずに終了コード 1 を返す
+    audio = tmp_path / "a.m4a"
+    audio.write_bytes(b"x")
+    vocab = tmp_path / "vocabulary.yml"
+    vocab.write_text("version: 1\n", encoding="utf-8")
+    cli = tmp_path / "whisper-cli.exe"
+    cli.write_bytes(b"x")
+    model = tmp_path / "m.bin"
+    model.write_bytes(b"x")
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        f"WHISPER_CLI_PATH={cli}\nWHISPER_MODEL_PATH={model}\n", encoding="utf-8"
+    )
+
+    def boom(**kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr("transcribe_audio.transcribe", boom)
+
+    code = main(
+        [
+            "--audio",
+            str(audio),
+            "--vocabulary",
+            str(vocab),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--env-file",
+            str(env_file),
+        ]
+    )
+    assert code == 1
 
 
 # ---------- main (CLI) ----------

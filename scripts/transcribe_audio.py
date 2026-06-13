@@ -56,7 +56,12 @@ def load_prompt_words(vocabulary_path: Path) -> str:
     if not vocabulary_path.exists():
         raise ValueError(f"辞書ファイルが見つかりません: {vocabulary_path}")
 
-    data = yaml.safe_load(vocabulary_path.read_text(encoding="utf-8"))
+    try:
+        data = yaml.safe_load(vocabulary_path.read_text(encoding="utf-8"))
+    except (yaml.YAMLError, OSError, UnicodeDecodeError) as exc:
+        raise ValueError(
+            f"辞書ファイルの読み込みまたは解析に失敗しました: {vocabulary_path}: {exc}"
+        ) from exc
     if data is None:
         return ""
     if not isinstance(data, Mapping):
@@ -208,7 +213,13 @@ def transcribe(
     prompt = load_prompt_words(vocabulary_path)
 
     ffmpeg_cmd = build_ffmpeg_command(audio_path, wav_path)
-    if subprocess.run(ffmpeg_cmd).returncode != 0:
+    try:
+        ffmpeg_result = subprocess.run(ffmpeg_cmd)
+    except FileNotFoundError as exc:
+        raise RuntimeError(
+            "ffmpeg が見つかりません．PATH 上に ffmpeg が存在することを確認してください．"
+        ) from exc
+    if ffmpeg_result.returncode != 0:
         raise RuntimeError(f"ffmpeg による WAV 変換に失敗しました: {audio_path}")
 
     whisper_cmd = build_whisper_command(
@@ -287,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             whisper_model=whisper_model,
             language=args.language,
         )
-    except (RuntimeError, ValueError) as exc:
+    except (RuntimeError, ValueError, OSError) as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
