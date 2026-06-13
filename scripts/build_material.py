@@ -27,7 +27,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 import yaml
@@ -38,7 +38,7 @@ SECTION_HUMAN_MEMO = "## 🗒️ 人間メモ（音声添付の後に書かれ�
 SECTION_RAW_TRANSCRIPTION = "## 🗣️ 生の文字起こし"
 STATE_TRANSCRIBED = "transcribed"
 STATE_ABSENT = "absent"
-_DATE_PREFIX_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})")
+_DATE_PREFIX_PATTERN = re.compile(r"^(\d{4}-\d{2}-\d{2})(?:-|$)")
 _FRONTMATTER_PATTERN = re.compile(r"^---\s*\n(.*?)\n---\s*\n?(.*)\Z", re.DOTALL)
 
 
@@ -113,8 +113,8 @@ def build_material(stem: str, memo_text: str, transcription_text: str) -> Materi
     transcription = transcription_text.strip()
 
     note_title = _str_or(front.get("note_title"), stem)
-    created = _str_or(front.get("created"), derive_created(stem))
-    updated = _str_or(front.get("updated"), created)
+    created = _str_or(_coerce_iso(front.get("created")), derive_created(stem))
+    updated = _str_or(_coerce_iso(front.get("updated")), created)
     author = _optional_str(front.get("author"))
     tags = _str_list(front.get("tags"))
     languages = _str_list(front.get("languages"))
@@ -170,6 +170,18 @@ def write_material(
 # ---------- internal helpers ----------
 
 
+def _coerce_iso(value: object) -> object:
+    """YAML が date / datetime として解釈した値を ISO 文字列へ正規化する．
+
+    str はそのまま返す．date / datetime は `isoformat()` で文字列化する．
+    それ以外は元の値を返す．無クォートの日付フロントマターを `_str_or` が
+    文字列として採用できるようにし，stem への黙示的フォールバックを防ぐ．
+    """
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value
+
+
 def _str_or(value: object, fallback: str) -> str:
     """value が非空の文字列ならそれを，さもなくば fallback を返す．"""
     if isinstance(value, str) and value.strip():
@@ -194,8 +206,8 @@ def _str_list(value: object) -> list[str]:
 def _yaml_frontmatter(material: Material) -> str:
     lines: list[str] = ["---", f"source: {material.source}"]
     lines.append(f'note_title: "{_yaml_escape(material.note_title)}"')
-    lines.append(f'created: "{material.created}"')
-    lines.append(f'updated: "{material.updated}"')
+    lines.append(f'created: "{_yaml_escape(material.created)}"')
+    lines.append(f'updated: "{_yaml_escape(material.updated)}"')
     if material.author:
         lines.append(f'author: "{_yaml_escape(material.author)}"')
     else:
@@ -242,6 +254,11 @@ def main(argv: list[str] | None = None) -> int:
         required=True,
         help="出力先ディレクトリ（無ければ作成する）",
     )
+    parser.add_argument(
+        "--allow-mismatched-basename",
+        action="store_true",
+        help="人間メモと文字起こしの basename 不一致を許容する（既定では拒否）",
+    )
     args = parser.parse_args(argv)
 
     for label, path in (("人間メモ", args.memo), ("文字起こし", args.transcription)):
@@ -251,6 +268,16 @@ def main(argv: list[str] | None = None) -> int:
         if not path.is_file():
             print(f"{label}が通常ファイルではありません: {path}", file=sys.stderr)
             return 2
+
+    if not args.allow_mismatched_basename and args.memo.stem != args.transcription.stem:
+        print(
+            "人間メモと文字起こしの basename が一致しません: "
+            f"{args.memo.stem!r} / {args.transcription.stem!r}．"
+            "別録音の取り違えを防ぐため拒否しました．"
+            "意図的な場合は --allow-mismatched-basename を指定してください．",
+            file=sys.stderr,
+        )
+        return 2
 
     stem = args.memo.stem
     memo_text = args.memo.read_text(encoding="utf-8")

@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import yaml
 
 from build_material import (
     Material,
@@ -85,6 +86,14 @@ def test_derive_created_returns_empty_for_invalid_calendar_date() -> None:
     assert derive_created("2026-13-40-無効日付") == ""
 
 
+def test_derive_created_requires_separator_after_date() -> None:
+    # 規約 YYYY-MM-DD-録音名 に反し，日付直後が区切りでも終端でもない stem は導出しない
+    assert derive_created("2026-04-28foo") == ""
+    # 日付のみ（終端）と，区切り付きは引き続き導出する
+    assert derive_created("2026-04-28") == "2026-04-28T00:00:00Z"
+    assert derive_created("2026-04-28-登壇メモ") == "2026-04-28T00:00:00Z"
+
+
 # ---------- build_material: メタデータ解決 ----------
 
 
@@ -119,6 +128,13 @@ def test_build_material_created_from_memo_frontmatter_overrides_stem() -> None:
     memo = '---\ncreated: "2026-04-28T09:49:31Z"\n---\n\n本文．'
     material = build_material("2026-04-28-登壇メモ", memo, "文字起こし．")
     assert material.created == "2026-04-28T09:49:31Z"
+
+
+def test_build_material_created_from_unquoted_yaml_date_is_kept() -> None:
+    # YAML が date として解釈する無クォート日付も，フロントマター優先で採用する
+    memo = "---\ncreated: 2026-04-28\n---\n\n本文．"
+    material = build_material("2026-01-01-別日付メモ", memo, "文字起こし．")
+    assert material.created == "2026-04-28"
 
 
 def test_build_material_source_is_audio() -> None:
@@ -201,6 +217,16 @@ def test_markdown_starts_with_frontmatter_delimiter(sample_markdown: str) -> Non
     assert sample_markdown.startswith("---\n")
 
 
+def test_markdown_created_with_quote_is_escaped() -> None:
+    # created にクォートが含まれてもフロントマターが壊れず YAML として読める
+    memo = '---\ncreated: "2026 \\"q\\""\n---\n\n本文．'
+    material = build_material("2026-04-28-メモ", memo, "文字起こし．")
+    md = material_to_markdown(material)
+    frontmatter_block = md.split("---", 2)[1]
+    loaded = yaml.safe_load(frontmatter_block)
+    assert loaded["created"] == '2026 "q"'
+
+
 # ---------- write_material ----------
 
 
@@ -246,3 +272,38 @@ def test_main_returns_2_when_memo_is_a_directory(tmp_path: Path) -> None:
     ])
 
     assert exit_code == 2
+
+
+def test_main_returns_2_when_basenames_mismatch(tmp_path: Path) -> None:
+    # 既定では memo と文字起こしの basename 不一致を終了コード 2 で拒否する
+    memo = tmp_path / "2026-04-28-talk.md"
+    memo.write_text("本文．", encoding="utf-8")
+    transcription = tmp_path / "別録音.txt"
+    transcription.write_text("文字起こし．", encoding="utf-8")
+
+    exit_code = main([
+        "--memo", str(memo),
+        "--transcription", str(transcription),
+        "--output-dir", str(tmp_path / "out"),
+    ])
+
+    assert exit_code == 2
+
+
+def test_main_allows_mismatched_basenames_with_flag(tmp_path: Path) -> None:
+    # --allow-mismatched-basename 指定時は basename 不一致でも素材を生成する
+    memo = tmp_path / "2026-04-28-talk.md"
+    memo.write_text("本文．", encoding="utf-8")
+    transcription = tmp_path / "別録音.txt"
+    transcription.write_text("文字起こし．", encoding="utf-8")
+    out = tmp_path / "out"
+
+    exit_code = main([
+        "--memo", str(memo),
+        "--transcription", str(transcription),
+        "--output-dir", str(out),
+        "--allow-mismatched-basename",
+    ])
+
+    assert exit_code == 0
+    assert (out / "2026-04-28-talk.md").exists()
