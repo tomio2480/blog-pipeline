@@ -287,7 +287,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # 明示指定した --env-file が存在しないときは黙ってフォールバックせず知らせる．
     # 既定の .env は存在しなくても許容する．
-    if args.env_file != Path(".env") and not args.env_file.exists():
+    if args.env_file != Path(".env") and not args.env_file.is_file():
         print(f"環境ファイルが見つかりません: {args.env_file}", file=sys.stderr)
         return 2
 
