@@ -77,6 +77,7 @@
 blog-pipeline/
 ├─ scripts/
 │  ├─ parse_enex.py           ENEX → Markdown（フロントマター付き）
+│  ├─ build_material.py       人間メモ + 生文字起こし → 2 セクション素材（フェーズ 7）
 │  ├─ list_materials.py       素材一覧の取得
 │  ├─ build_dictionary.py     形態素解析で固有名詞辞書を更新
 │  ├─ publish.py              AtomPub 投稿（常に下書き）

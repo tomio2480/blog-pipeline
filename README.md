@@ -60,6 +60,7 @@
 `parse_enex.py`・`list_materials.py`・`publish.py` は標準ライブラリのみで実装している．
 `prompt-maker/generate_prompts.py` も同様である．
 `build_dictionary.py` は形態素解析のため `janome` と `pyyaml` を使用する．
+`build_material.py` は人間メモのフロントマター解析のため `pyyaml` を使用する．
 テストは `pytest` を使う．
 
 ### Python 環境
@@ -97,6 +98,23 @@ python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
 `<h1>` を含む旧ノートは互換として
 🤖 Evernote AI 構造化情報セクションを人間メモと生の文字起こしの間に追加出力する（3 セクション構成）．
 ENEX 内の音声 base64 データは出力に含めない．
+
+### `build_material.py` の使い方
+
+録音音声から得た生の文字起こしと，人が手書きした人間メモ Markdown を 1 つの素材へまとめる．
+フェーズ 7 で新設した音声直接取り込み経路の素材生成を担う．
+
+```bash
+python scripts/build_material.py \
+  --memo path/to/2026-04-28-録音名.md \
+  --transcription path/to/transcript.txt \
+  --output-dir materials/raw
+```
+
+出力は `parse_enex.py` と同一の 2 セクション構成（🗒️ 人間メモ／🗣️ 生の文字起こし）となる．
+`note_title` と `created` は人間メモのファイル名 stem から導出する．
+人間メモがフロントマターを持つ場合は `tags` 等を引き継ぐ．
+フロントマターの `source` は `audio` で固定する．
 
 ### `build_dictionary.py` の使い方
 
