@@ -21,7 +21,9 @@
 
 ## 🏛️ 全体像
 
-人間が Evernote で録音と内蔵文字起こしを済ませ，ENEX としてエクスポートしたものを起点とする．以降の工程はスクリプトと Claude Code の Subagent／Skill で進める．完成稿は AtomPub で常に下書き投稿し，公開判断は人間がはてなブログ管理画面で行う．
+人間が録音した音声を起点とする．音声は `whisper.cpp` で文字起こしする．これと人が手書きした人間メモを `build_material.py` が素材へまとめる．以降の工程はスクリプトと Claude Code の Subagent／Skill で進める．完成稿は AtomPub で常に下書き投稿し，公開判断は人間がはてなブログ管理画面で行う．
+
+旧来の Evernote／ENEX 経路は非推奨とする．`parse_enex.py` は既存素材の変換用に残置する．
 
 設計の詳細・パイプラインの図・意思決定の経緯は [ARCHITECTURE.md](ARCHITECTURE.md) を参照のこと．本 README ではリポジトリ利用に必要な範囲のみを扱う．
 
@@ -60,6 +62,7 @@
 `parse_enex.py`・`list_materials.py`・`publish.py` は標準ライブラリのみで実装している．
 `prompt-maker/generate_prompts.py` も同様である．
 `build_dictionary.py` は形態素解析のため `janome` と `pyyaml` を使用する．
+`build_material.py` は人間メモのフロントマター解析のため `pyyaml` を使用する．
 テストは `pytest` を使う．
 
 ### Python 環境
@@ -86,6 +89,9 @@ Evernote AI に投入する構造化プロンプトを 3 段階分生成する C
 
 ### `parse_enex.py` の使い方
 
+> **非推奨．** Evernote の利用停止（2026-06-13）に伴い ENEX 取り込みは廃止した．
+> 新規素材は `build_material.py` で生成する．本スクリプトは既存 ENEX 素材の変換用に残置する．
+
 ENEX ファイルを Markdown へ変換する．
 
 ```bash
@@ -97,6 +103,23 @@ python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
 `<h1>` を含む旧ノートは互換として
 🤖 Evernote AI 構造化情報セクションを人間メモと生の文字起こしの間に追加出力する（3 セクション構成）．
 ENEX 内の音声 base64 データは出力に含めない．
+
+### `build_material.py` の使い方
+
+録音音声から得た生の文字起こしと，人が手書きした人間メモ Markdown を 1 つの素材へまとめる．
+フェーズ 7 で新設した音声直接取り込み経路の素材生成を担う．
+
+```bash
+python scripts/build_material.py \
+  --memo path/to/2026-04-28-録音名.md \
+  --transcription path/to/transcript.txt \
+  --output-dir materials/raw
+```
+
+出力は `parse_enex.py` と同一の 2 セクション構成（🗒️ 人間メモ／🗣️ 生の文字起こし）となる．
+`note_title` と `created` は人間メモのファイル名 stem から導出する．
+人間メモがフロントマターを持つ場合は `tags` 等を引き継ぐ．
+フロントマターの `source` は `audio` で固定する．
 
 ### `build_dictionary.py` の使い方
 

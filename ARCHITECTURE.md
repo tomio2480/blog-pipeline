@@ -28,23 +28,23 @@
 
 - 自動公開機能は実装しない
 - 多人数執筆や共同編集は対象外
-- Evernote 以外のソース（Notion・Obsidian 等）からの取り込みは対象外
+- 音声以外のソース（Notion・Obsidian 等）からの取り込みは対象外
 - 商用展開は想定しない
 
 ## 🏛️ 全体パイプライン
 
-執筆者（人間）は録音と Evernote から ENEX を取り出すまでの橋渡し，および公開判断を担当する．それ以外の工程はスクリプトと Claude Code の Subagent・Skill で処理する．
+執筆者（人間）は録音と人間メモの手書き，および公開判断を担当する．それ以外の工程はスクリプトと Claude Code の Subagent・Skill で処理する．
 
-図 1 全体構成（左が入力，右が出力）
+図 1 全体構成（左が入力，右が出力）．録音音声から文字起こしと素材生成を経て，はてなブログの下書き投稿へ至る流れの図である．
 
 ```
-[人間 録音 + Evernote 添付]
+[人間 録音]
     ↓
-[Evernote 内蔵文字起こし]
+[whisper.cpp 文字起こし]  vocabulary.yml の canonical 語を --prompt へ注入
     ↓
-[人間 ENEX エクスポート]
+[人間 メモ Markdown 手書き]  音声と共通の basename で対応づけ
     ↓
-[parse_enex.py]  ENML → Markdown，メタ情報抽出（2 セクション構成）
+[build_material.py]  人間メモ + 生文字起こし → 2 セクション素材
     ↓
 [materials/raw/*.md]
     ↓
@@ -65,18 +65,19 @@
 [人間 公開判断]
 ```
 
-文字起こしは Evernote 内蔵の機能を利用する．
-構造化・リンク整理・固有名詞校閲は `blog-private` 側の Claude Subagent が担当する．
-`generate_prompts.py` による Evernote AI への 3 段階プロンプト投入は 2026-06-12 に廃止した．
-素材は ENEX エクスポートで人間がリポジトリに橋渡しする．
-これにより whisper.cpp や Evernote API への依存を排し，利用者の準備コストを最小化する．
+文字起こしは `whisper.cpp` をローカルで実行する．`vocabulary.yml` の canonical 語を `--prompt` へ注入する．
+固有名詞校閲・構造化・リンク整理は `blog-private` 側の Claude Subagent が担当する．
+旧来の Evernote／ENEX 経路は非推奨とする．`parse_enex.py` は既存素材の変換用に残置する．
+`generate_prompts.py` による Evernote AI 連携も 2026-06-12 に廃止した．
+これにより Evernote 購読への依存を解消し，処理がローカルで完結する．
 
 ## 📂 リポジトリ構成と提供物
 
 ```
 blog-pipeline/
 ├─ scripts/
-│  ├─ parse_enex.py           ENEX → Markdown（フロントマター付き）
+│  ├─ parse_enex.py           ENEX → Markdown（非推奨．旧素材変換用）
+│  ├─ build_material.py       人間メモ + 生文字起こし → 2 セクション素材（フェーズ 7）
 │  ├─ list_materials.py       素材一覧の取得
 │  ├─ build_dictionary.py     形態素解析で固有名詞辞書を更新
 │  ├─ publish.py              AtomPub 投稿（常に下書き）
@@ -120,12 +121,11 @@ blog-pipeline/
 
 | 工程 | 担当 | モデル | 理由 |
 |---|---|---|---|
-| 音声録音と Evernote 添付 | 人間 | - | 既存習慣に載せる |
-| 文字起こし | Evernote 内蔵 | - | サードパーティサービスに委譲 |
-| Evernote AI プロンプト生成 | スクリプト（`generate_prompts.py`）| - | 決定論的 |
-| Evernote AI 構造化 | Evernote AI | - | サードパーティサービスに委譲 |
-| ENEX エクスポート | 人間 | - | API 申請を回避するための橋渡し |
-| ENML → Markdown 変換 | スクリプト（`parse_enex.py`）| - | 決定論的 |
+| 音声録音 | 人間 | - | 既存習慣に載せる |
+| 文字起こし | スクリプト（`whisper.cpp`）| - | ローカルで決定論的に実行 |
+| 人間メモ手書き | 人間 | - | URL・関連資料の補足 |
+| 2 セクション素材生成 | スクリプト（`build_material.py`）| - | 決定論的 |
+| ENML → Markdown 変換（非推奨）| スクリプト（`parse_enex.py`）| - | 旧素材変換用 |
 | 文字起こし校正（固有名詞補正）| Subagent | Sonnet または Haiku | 辞書照合と文脈判断のミックス |
 | 形態素解析・辞書構築 | スクリプト | - | 決定論的 |
 | ノート要約（200 字）| Subagent | Haiku | 量が多く単純判断 |
@@ -214,7 +214,8 @@ ENEX は 1 ファイルが数百 MB に達することもある．そのため `
 |---|---|
 | ENEX | Evernote の公式エクスポート形式．XML ベースで，ENML 本文と添付，タグを内包する |
 | ENML | Evernote 独自のノート記法．XML ベース |
-| Evernote AI | Evernote 内蔵の AI 機能．文字起こしと構造化（要点抽出，補足情報の URL 付与等）を提供 |
+| Evernote AI | Evernote 内蔵の AI 機能．文字起こしと構造化（要点抽出，補足情報の URL 付与等）を提供．2026-06-12 に利用廃止 |
+| whisper.cpp | ローカルで動作する音声文字起こしエンジン．`large-v3` モデルと `--prompt` 注入を用いる |
 | AtomPub | はてなブログ公式の投稿用 API．WSSE 認証 |
 | Subagent | Claude Code が提供する，独立コンテキストで動く別エージェント |
 | Skill | Claude Code が提供する，特定タスク用の常設指示と実装 |
