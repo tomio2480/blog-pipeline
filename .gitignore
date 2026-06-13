@@ -39,6 +39,9 @@ materials/
 # （session_id にイベント名・人名等の固有名詞が含まれうるため．D2 運用では個人化版の cwd へ出力する）
 /[0-9][0-9][0-9][0-9]-*/
 
+# 個人化版の article-drafter 等が誤って本リポジトリ内で原稿を出力しても commit されないようにする
+drafts/
+
 # OS
 .DS_Store
 Thumbs.db

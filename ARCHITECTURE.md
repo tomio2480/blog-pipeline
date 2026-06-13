@@ -213,16 +213,28 @@ ENEX は 1 ファイルが数百 MB に達することもある．そのため `
 
 この方式では CLI の出力が個人化版側へ落ちる．そのため固有名詞を含む生成物は Public リポジトリへ混入しない．`session_id` にはイベント名や人名が含まれうるため，出力先の分離が事故防止の要点となる．
 
-呼び出し例を次に示す．`/path/to/...` は各利用者の環境に読み替える．
+呼び出し例を次に示す．兄弟ディレクトリ配置なら相対パスで簡潔に呼び出せる．`../blog-pipeline` は各利用者の環境に合わせて読み替える．
+
+非推奨の `generate_prompts.py` による例を次に示す．出力先が `./{session_id}/` となり，固有名詞を含むディレクトリが生じる代表例のため挙げた．
 
 ```bash
-cd /path/to/個人化版/prompts
-python /path/to/blog-pipeline/scripts/prompt-maker/generate_prompts.py "session_id"
+cd ../個人化版/prompts
+python ../../blog-pipeline/scripts/prompt-maker/generate_prompts.py "session_id"
 ```
 
-上記の例は非推奨の `generate_prompts.py` である．出力先が `./{session_id}/` となり，固有名詞を含むディレクトリが生じる代表例のため挙げた．現行の `build_material.py` や `list_materials.py` など出力を生成するスクリプトにも同じ原則が当てはまる．いずれも個人化版の作業ディレクトリから呼び出し，出力を Private 側へ落とす．
+現行の `build_material.py` による推奨例を次に示す．人間メモと文字起こしから 2 セクション素材を生成し，個人化版の `materials/raw/` へ出力する．
 
-防御線として，本リポジトリの `.gitignore` は先頭が 4 桁数字のトップレベルディレクトリを除外する．CLI を誤って本リポジトリ内で実行した場合の安全網であり，`materials/` の除外と同じレイヤに位置づける．
+```bash
+cd ../個人化版
+python ../blog-pipeline/scripts/build_material.py \
+  --memo ./materials/audio/2026-06-13-録音名.md \
+  --transcription ./.scratch/2026-06-13-録音名.txt \
+  --output-dir ./materials/raw
+```
+
+`build_material.py` や `list_materials.py` など出力を生成するスクリプトにも同じ原則が当てはまる．いずれも個人化版の作業ディレクトリから呼び出し，出力を Private 側へ落とす．
+
+防御線として，本リポジトリの `.gitignore` は先頭が 4 桁数字のトップレベルディレクトリと `drafts/` を除外する．CLI を誤って本リポジトリ内で実行した場合の安全網であり，`materials/` の除外と同じレイヤに位置づける．
 
 パッケージ化（D1）や submodule 方式（D3）への発展は本書では扱わない．
 
