@@ -34,14 +34,18 @@ def _dequote_list_element(item_val: str) -> str:
     """リスト要素のクォートを除去する．
 
     - ダブルクォート始まりは JSON 文字列として解析し ``\\"`` や ``\\n`` 等のエスケープを処理する．
-      JSON として不正な場合は両端クォートのスライスにフォールバックする．
+      JSON として不正な場合，または閉じクォート後に余分なデータが残る場合は，
+      両端クォートのスライスにフォールバックする（値の切り捨てを防ぐ）．
     - シングルクォートはエスケープ処理せず両端のクォートのみ除去する．
     - クォートなしはそのまま返す．
     """
     if item_val.startswith('"'):
         try:
-            value, _ = _JSON_DECODER.raw_decode(item_val)
-            return value
+            value, end = _JSON_DECODER.raw_decode(item_val)
+            # 閉じクォート以降に余分なデータが無いときだけ採用する．
+            # ``"foo"bar`` のような不正要素を 'foo' へ丸めないため．
+            if item_val[end:].strip() == "":
+                return value
         except json.JSONDecodeError:
             pass
         # フォールバック：両端ダブルクォートなら単純スライス

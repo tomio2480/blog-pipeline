@@ -1,6 +1,6 @@
 """list_materials.py のテスト．TDD（Red-Green-Refactor）で実装する．
 
-テストケース 29 件を含む．
+テストケース 31 件を含む．
 """
 
 from __future__ import annotations
@@ -565,4 +565,31 @@ def test_block_list_element_with_backslash_n_parses_correctly() -> None:
 
     assert result["auto_tags"] == ["line1\nline2"], (
         f"ブロックリストの \\n が改行文字にならなかった: {result['auto_tags']!r}"
+    )
+
+
+def test_inline_array_element_with_trailing_data_is_not_truncated() -> None:
+    """閉じクォートの後に余分なデータがある要素は値を切り捨てない（Codex レビュー指摘）．
+    tags: ["foo"bar] は不正な要素だが，raw_decode の戻り値 'foo' で丸めず，
+    従来どおりフォールバックで原文を保持する．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'tags: ["foo"bar]'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ['"foo"bar'], (
+        f"閉じクォート後の余分なデータが切り捨てられた: {result['tags']!r}"
+    )
+
+
+def test_block_list_element_with_trailing_data_is_not_truncated() -> None:
+    """ブロックリストでも閉じクォート後の余分なデータを切り捨てない（Codex レビュー指摘）．"""
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'auto_tags:\n  - "foo"bar\n'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["auto_tags"] == ['"foo"bar'], (
+        f"閉じクォート後の余分なデータが切り捨てられた: {result['auto_tags']!r}"
     )
