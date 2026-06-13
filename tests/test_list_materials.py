@@ -1,6 +1,6 @@
 """list_materials.py のテスト．TDD（Red-Green-Refactor）で実装する．
 
-テストケース 23 件を含む．
+テストケース 29 件を含む．
 """
 
 from __future__ import annotations
@@ -482,4 +482,87 @@ def test_quoted_value_unterminated_falls_back_gracefully() -> None:
 
     assert result["summary"] == "unterminated", (
         f"未終端入力のフォールバック結果が期待と異なる: {result['summary']!r}"
+    )
+
+
+# ---------- Issue #18: リスト要素のクォートエスケープ対応 ----------
+
+
+def test_inline_array_element_with_escaped_quote_parses_correctly() -> None:
+    """インライン配列の要素に含まれるエスケープ済みクォートが正しく解析される（Issue #18）．
+    tags: ["a\\"b", "c"] → ['a"b', 'c'] になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'tags: ["a\\"b", "c"]'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ['a"b', "c"], (
+        f"インライン配列のエスケープ済みクォートが解析されなかった: {result['tags']!r}"
+    )
+
+
+def test_inline_array_element_with_backslash_n_parses_correctly() -> None:
+    """インライン配列の要素内 \\n が改行文字として解析される（Issue #18）．
+    tags: ["line1\\nline2"] → ['line1\nline2'] になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'tags: ["line1\\nline2"]'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == ["line1\nline2"], (
+        f"インライン配列の \\n が改行文字にならなかった: {result['tags']!r}"
+    )
+
+
+def test_inline_array_element_with_yaml_only_escape_falls_back_to_slice() -> None:
+    r"""JSON 不正なエスケープ（\a 等）はスライスのフォールバックで処理される（Issue #18）．
+    tags: ["\a"] → JSONDecodeError によりフォールバックし ['\a'] を返す．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = r'tags: ["\a"]'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == [r"\a"], (
+        f"インライン配列のフォールバック結果が期待と異なる: {result['tags']!r}"
+    )
+
+
+def test_inline_array_single_quoted_element_keeps_literal(tmp_path: Path) -> None:
+    r"""シングルクォートの要素はエスケープ処理せず素のまま除去する（Issue #18）．
+    tags: ['a\nb'] → ['a\nb']（バックスラッシュ n が文字どおり残る）になる．
+    """
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = r"tags: ['a\nb']"
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["tags"] == [r"a\nb"], (
+        f"シングルクォート要素のリテラルが保持されなかった: {result['tags']!r}"
+    )
+
+
+def test_block_list_element_with_escaped_quote_parses_correctly() -> None:
+    """ブロックリストの要素に含まれるエスケープ済みクォートが正しく解析される（Issue #18）．"""
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'auto_tags:\n  - "tag\\"x"\n  - plain\n'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["auto_tags"] == ['tag"x', "plain"], (
+        f"ブロックリストのエスケープ済みクォートが解析されなかった: {result['auto_tags']!r}"
+    )
+
+
+def test_block_list_element_with_backslash_n_parses_correctly() -> None:
+    """ブロックリストの要素内 \\n が改行文字として解析される（Issue #18）．"""
+    from list_materials import _parse_simple_yaml
+
+    yaml_text = 'auto_tags:\n  - "line1\\nline2"\n'
+    result = _parse_simple_yaml(yaml_text)
+
+    assert result["auto_tags"] == ["line1\nline2"], (
+        f"ブロックリストの \\n が改行文字にならなかった: {result['auto_tags']!r}"
     )

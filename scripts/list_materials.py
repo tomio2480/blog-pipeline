@@ -27,6 +27,32 @@ from typing import Any
 # ---------- YAML 限定パーサ ----------
 
 
+_JSON_DECODER = json.JSONDecoder()
+
+
+def _dequote_list_element(item_val: str) -> str:
+    """リスト要素のクォートを除去する．
+
+    - ダブルクォート始まりは JSON 文字列として解析し ``\\"`` や ``\\n`` 等のエスケープを処理する．
+      JSON として不正な場合は両端クォートのスライスにフォールバックする．
+    - シングルクォートはエスケープ処理せず両端のクォートのみ除去する．
+    - クォートなしはそのまま返す．
+    """
+    if item_val.startswith('"'):
+        try:
+            value, _ = _JSON_DECODER.raw_decode(item_val)
+            return value
+        except json.JSONDecodeError:
+            pass
+        # フォールバック：両端ダブルクォートなら単純スライス
+        if item_val.endswith('"') and len(item_val) >= 2:
+            return item_val[1:-1]
+        return item_val
+    if item_val.startswith("'") and item_val.endswith("'") and len(item_val) >= 2:
+        return item_val[1:-1]
+    return item_val
+
+
 def _parse_simple_yaml(text: str) -> dict[str, Any]:
     """ネスト無し・コメント無視の限定 YAML パーサ．
 
@@ -37,7 +63,6 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
     """
     result: dict[str, Any] = {}
     lines = text.splitlines()
-    decoder = json.JSONDecoder()
     i = 0
     while i < len(lines):
         line = lines[i]
@@ -64,7 +89,7 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
             if quote_char == '"':
                 # ダブルクォート：JSON 文字列として解析し \" や \n 等を処理する
                 try:
-                    value, _ = decoder.raw_decode(raw_val)
+                    value, _ = _JSON_DECODER.raw_decode(raw_val)
                 except json.JSONDecodeError:
                     pass
 
@@ -79,11 +104,10 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
             inner = raw_val.strip("[]")
             items_inline: list[str] = []
             for item_raw in inner.split(","):
-                item_val = item_raw.strip()
-                # クォート除去
-                if (item_val.startswith('"') and item_val.endswith('"')) or \
-                   (item_val.startswith("'") and item_val.endswith("'")):
-                    item_val = item_val[1:-1]
+                item_raw = item_raw.strip()
+                if not item_raw:
+                    continue
+                item_val = _dequote_list_element(item_raw)
                 if item_val:
                     items_inline.append(item_val)
             result[key] = items_inline
@@ -100,12 +124,7 @@ def _parse_simple_yaml(text: str) -> dict[str, Any]:
                     continue
                 list_m = re.match(r'^\s+- (.*)', next_line)
                 if list_m:
-                    item_val = list_m.group(1).strip()
-                    # クォート除去
-                    if (item_val.startswith('"') and item_val.endswith('"')) or \
-                       (item_val.startswith("'") and item_val.endswith("'")):
-                        item_val = item_val[1:-1]
-                    items.append(item_val)
+                    items.append(_dequote_list_element(list_m.group(1).strip()))
                     i += 1
                 else:
                     break
