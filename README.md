@@ -129,6 +129,30 @@ python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
 🤖 Evernote AI 構造化情報セクションを人間メモと生の文字起こしの間に追加出力する（3 セクション構成）．
 ENEX 内の音声 base64 データは出力に含めない．
 
+### `transcribe_audio.py` の使い方
+
+録音音声を `whisper.cpp` で文字起こしし，生の文字起こしテキストを出力する．
+フェーズ 7 で新設した音声直接取り込み経路の文字起こし工程を担う．
+`ffmpeg` で 16kHz モノラル WAV へ変換した上で `whisper.cpp` の `large-v3` を実行する．
+
+`whisper.cpp` のバイナリとモデルは環境依存のため，パスを環境変数で渡す．
+未設定なら明示エラーで停止する．
+
+```bash
+export WHISPER_CLI_PATH=/path/to/whisper-cli
+export WHISPER_MODEL_PATH=/path/to/ggml-large-v3.bin
+python scripts/transcribe_audio.py \
+  --audio path/to/2026-04-28-録音名.m4a \
+  --vocabulary path/to/vocabulary.yml \
+  --output-dir .scratch/transcription
+```
+
+ループ対策として `-mc 0`（直前文脈の持ち越し無効化）を標準化する．
+`vocabulary.yml` の canonical 語を `--prompt`（初期プロンプト）へ注入し，固有名詞の正答率を補助する．
+ただし初期プロンプトは soft hint であり，誤認識の残りは後段の `transcript-corrector` で補正する前提とする．
+入力音声と中間 WAV，生の文字起こしは再生成できるため `.scratch/` 配下など Git 管理外へ出力する．
+`ffmpeg` は PATH 上にある前提とする．
+
 ### `build_material.py` の使い方
 
 録音音声から得た生の文字起こしと，人が手書きした人間メモ Markdown を 1 つの素材へまとめる．
