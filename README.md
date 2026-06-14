@@ -66,7 +66,7 @@
 
 ## 🛤️ 実装フェーズと現状
 
-実装は 0 から 5 までの 6 フェーズで進める．フェーズ 0〜3 はクローズ済みである．各フェーズの進捗は GitHub Issue（`phase-N` ラベル）で追跡する．
+実装は 0 から 7 までの 8 フェーズで進める．全フェーズがクローズ済みである．各フェーズの進捗は GitHub Issue（`phase-N` ラベル）で追跡する．
 
 表 2 フェーズと主な成果物．
 
@@ -78,6 +78,8 @@
 | 3 | `article-proposer`，`article-drafter`，`structure-note`，`writing-style` ひな形 | 完了 |
 | 4 | lint 設定ファイル群，`draft-reviewer`，`review-draft`，`publish.py` | 完了 |
 | 5 | `build_dictionary.py`，月次運用ドキュメント，CI・Skill チューニング | 完了 |
+| 6 | `parse_enex.py` の 2 セクション化，`prompt-maker/` の非推奨化（Evernote AI 連携廃止），STT パイロット | 完了 |
+| 7 | `transcribe_audio.py`，`build_material.py`，`parse_enex.py` の非推奨化（Evernote 廃止・音声直接取り込み経路） | 完了 |
 
 `.textlintrc.json`・`prh.yml`・`.markdownlint-cli2.yaml` はフェーズ 4 で追加する．それまでは中央テンプレート（[tomio2480/github-workflows](https://github.com/tomio2480/github-workflows)）の標準設定が CI で適用される．
 

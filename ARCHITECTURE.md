@@ -146,7 +146,7 @@ Skill はオーケストレーション役，Subagent は個別タスクの実�
 
 ## 🛤️ 段階的実装フェーズ
 
-実装は 0 から 5 までの 6 フェーズで進める．本リポジトリで提供する成果物の範囲を以下に示す．
+実装は 0 から 7 までの 8 フェーズで進める．本リポジトリで提供する成果物の範囲を以下に示す．
 
 | フェーズ | 提供する成果物 | 状態 |
 |---|---|---|
@@ -156,6 +156,8 @@ Skill はオーケストレーション役，Subagent は個別タスクの実�
 | 3 | `agent-templates/article-proposer.md`，`agent-templates/article-drafter.md`，`skill-templates/structure-note/`，`skill-templates/writing-style/` のひな形 | 完了 |
 | 4 | `.textlintrc.json`，`prh.yml`，`.markdownlint-cli2.yaml` の汎用設定，`agent-templates/draft-reviewer.md`，`skill-templates/review-draft/`，`publish.py` | 完了 |
 | 5 | `build_dictionary.py`，月次運用のドキュメント，CI・Skill チューニング | 完了 |
+| 6 | `parse_enex.py` の 2 セクション化（`<h1>` 非依存），`scripts/prompt-maker/` の非推奨化，STT パイロットによる `whisper.cpp` 採用判断 | 完了 |
+| 7 | `transcribe_audio.py`，`build_material.py`，`parse_enex.py` の非推奨化（Evernote 廃止・音声直接取り込み経路） | 完了 |
 
 各フェーズは GitHub Issue（`phase-N` ラベル）で管理する．フェーズ間で依存があれば Issue 本文に明記する．
 
