@@ -68,9 +68,9 @@ def _split_inline_array(inner: str) -> list[str]:
     """
     elements: list[str] = []
     current: list[str] = []
-    in_double = False
-    in_single = False
-    escaped = False
+    in_double: bool = False
+    in_single: bool = False
+    escaped: bool = False
     for ch in inner:
         if escaped:
             current.append(ch)
