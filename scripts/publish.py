@@ -212,13 +212,13 @@ def decide_publish_method(fm: dict[str, str]) -> tuple[str, str | None]:
     - `hatena_entry_id` あり → ("PUT", entry_id)（既存下書きの更新）．
     - それ以外 → ("POST", None)（新規作成）．
     """
-    published = str(fm.get("hatena_published", "")).strip().lower() in _TRUTHY
+    published: bool = str(fm.get("hatena_published", "")).strip().lower() in _TRUTHY
     if published:
         raise ValueError(
             "hatena_published が真のため自動送信を拒否します．"
             "公開後ははてなブログ側を真とし，publish.py からの更新は行いません．"
         )
-    entry_id = fm.get("hatena_entry_id") or None
+    entry_id: str | None = fm.get("hatena_entry_id") or None
     if entry_id:
         return ("PUT", entry_id)
     return ("POST", None)
@@ -235,17 +235,19 @@ def parse_collection_feed(xml_bytes: bytes) -> list[dict]:
     サードパーティ依存ゼロを設計原則とするため `defusedxml` は導入しない．
     expat は外部エンティティ・外部 DTD を解決しないため XXE は対象外である．
     """
-    root = ET.fromstring(xml_bytes)
+    root: ET.Element = ET.fromstring(xml_bytes)
     results: list[dict] = []
     for entry in root.findall(f"{{{ATOM_NS}}}entry"):
-        id_el = entry.find(f"{{{ATOM_NS}}}id")
-        title_el = entry.find(f"{{{ATOM_NS}}}title")
-        draft_el = entry.find(f"{{{APP_NS}}}control/{{{APP_NS}}}draft")
-        id_text = id_el.text if id_el is not None and id_el.text else ""
-        match = re.search(r"-(\d+)$", id_text)
-        entry_id = match.group(1) if match else ""
-        title = title_el.text if title_el is not None and title_el.text else ""
-        draft = (
+        id_el: ET.Element | None = entry.find(f"{{{ATOM_NS}}}id")
+        title_el: ET.Element | None = entry.find(f"{{{ATOM_NS}}}title")
+        draft_el: ET.Element | None = entry.find(
+            f"{{{APP_NS}}}control/{{{APP_NS}}}draft"
+        )
+        id_text: str = id_el.text if id_el is not None and id_el.text else ""
+        match: re.Match[str] | None = re.search(r"-(\d+)$", id_text)
+        entry_id: str = match.group(1) if match else ""
+        title: str = title_el.text if title_el is not None and title_el.text else ""
+        draft: bool = (
             draft_el is not None
             and (draft_el.text or "").strip().lower() == "yes"
         )
@@ -328,7 +330,7 @@ def publish_draft(
         method, entry_id = decide_publish_method(fm)
     except ValueError as exc:
         print(f"Skip: {draft_path}: {exc}", file=sys.stderr)
-        sys.exit(1)
+        return
 
     entry_xml = build_atom_entry(title, body)
     if method == "PUT":
@@ -465,20 +467,31 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    missing = [p for p in args.draft_file if not p.exists()]
+    missing = [p for p in args.draft_file if not p.is_file()]
     if missing:
         for p in missing:
             print(f"Error: ファイルが見つかりません: {p}", file=sys.stderr)
         sys.exit(1)
 
+    if args.env_file != Path(".env") and not args.env_file.is_file():
+        print(
+            f"Error: 指定された環境変数ファイルが見つかりません: {args.env_file}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     username, blog_id, api_key = _load_credentials(args.env_file)
 
-    if args.sync:
-        sync_entry_ids(args.draft_file, username, blog_id, api_key)
-        return
+    try:
+        if args.sync:
+            sync_entry_ids(args.draft_file, username, blog_id, api_key)
+            return
 
-    for path in args.draft_file:
-        publish_draft(path, username, blog_id, api_key)
+        for path in args.draft_file:
+            publish_draft(path, username, blog_id, api_key)
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":
