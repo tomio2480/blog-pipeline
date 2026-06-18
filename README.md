@@ -221,7 +221,19 @@ python scripts/publish.py drafts/2026-05-07-my-article.md
 python scripts/publish.py drafts/2026-05-07-my-article.md --env-file /path/to/.env
 ```
 
-常に下書きとして投稿する．公開判断ははてなブログ管理画面で人間が行う．
+常に下書きとして投稿する（`<app:draft>yes</app:draft>` をハードコード）．公開判断ははてなブログ管理画面で人間が行う．
+
+複数ファイルをまとめて送れる．送信メソッドは frontmatter で自動判定する．
+
+- `hatena_entry_id` なし：新規 `POST`．成功時にレスポンスの entry ID を frontmatter へ書き戻す．
+- `hatena_entry_id` あり：既存下書きの更新 `PUT`．未公開の下書きを再送する用途．
+- `hatena_published: true`：公開後ははてな側を真とするため，自動送信を拒否する（安全ガード）．
+
+`--sync` は送信せず，はてな側のエントリ一覧を取得して title 一致で `hatena_entry_id` を frontmatter へ記録する．送信済みだが ID 未記録の下書きを更新可能にするための回収に使う．
+
+```bash
+python scripts/publish.py drafts/*.md --sync
+```
 
 ### テスト
 
