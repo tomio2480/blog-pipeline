@@ -243,6 +243,8 @@ python scripts/publish.py drafts/*.md --sync
 python scripts/publish.py drafts/*.md --verify
 ```
 
+欠落（404）や通信エラーが 1 件でもあれば終了コード 1 で終わるため，CI で検証失敗を検知できる．`hatena_entry_id` 未設定は未送信・未回収の通常状態とみなし，失敗には数えない．
+
 ### テスト
 
 ```bash

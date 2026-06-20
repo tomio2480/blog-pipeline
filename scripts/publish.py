@@ -484,6 +484,12 @@ def publish_draft(
                 text, "hatena_entry_id", new_id, quote=True
             )
             draft_path.write_text(updated, encoding="utf-8")
+            # 同一バッチ内に同名の新規ドラフトが続く場合の重複 POST を防ぐため，
+            # 送信した ID を索引へ反映し，後続の照合で抑止できるようにする．
+            if existing_index is not None:
+                key = normalize_title(title)
+                if key:
+                    existing_index.setdefault(key, []).append(new_id)
         entry_id = new_id
 
     if entry_id:
@@ -576,13 +582,18 @@ def verify_entries(
     username: str,
     blog_id: str,
     api_key: str,
-) -> None:
+) -> bool:
     """各ドラフトの `hatena_entry_id` をメンバー `GET` し，実在を検証する．
 
     コレクションフィードは結果整合で取りこぼすため，存在確認はメンバー `GET`
     （200／404）を正本とする．送信や frontmatter の変更は行わない（読み取りのみ）．
     診断目的のため，1 件のエラーで中断せず各ドラフトを最後まで検証する．
+
+    検証に失敗した項目（404 の欠落・HTTP／URL エラー）が 1 件でもあれば `False`，
+    すべて健全なら `True` を返す．呼び出し元はこの戻り値で終了コードを決められる．
+    `hatena_entry_id` 未設定は未送信・未回収の通常状態とみなし，失敗に数えない．
     """
+    ok = True
     for path in draft_paths:
         fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"), source=str(path))
         entry_id = fm.get("hatena_entry_id")
@@ -596,9 +607,11 @@ def verify_entries(
                 f"Error: HTTP {exc.code} {exc.reason}: {path} (id={entry_id})",
                 file=sys.stderr,
             )
+            ok = False
             continue
         except urllib.error.URLError as exc:
             print(f"Error: {exc.reason}: {path} (id={entry_id})", file=sys.stderr)
+            ok = False
             continue
         if exists:
             print(f"OK（実在）: {path} -> {entry_id}")
@@ -608,6 +621,8 @@ def verify_entries(
                 "ID の付け間違いか，はてな側で削除された可能性があります．",
                 file=sys.stderr,
             )
+            ok = False
+    return ok
 
 
 def _load_credentials(env_file: Path) -> tuple[str, str, str]:
@@ -676,7 +691,8 @@ def main() -> None:
             return
 
         if args.verify:
-            verify_entries(args.draft_file, username, blog_id, api_key)
+            if not verify_entries(args.draft_file, username, blog_id, api_key):
+                sys.exit(1)
             return
 
         # 新規 POST 予定（hatena_entry_id 未設定）のドラフトがある場合のみ，

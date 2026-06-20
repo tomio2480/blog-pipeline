@@ -561,3 +561,94 @@ def test_publish_draft_no_index_posts(
     p = _draft_without_id(tmp_path)
     publish.publish_draft(p, "u", "b", "k")
     assert calls == ["POST"]
+
+
+def test_publish_draft_post_updates_existing_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST 成功時，同一バッチ内の後続抑止のため existing_index に新 ID を足す．"""
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p = _draft_without_id(tmp_path)
+    index: dict[str, list[str]] = {}
+    publish.publish_draft(p, "u", "b", "k", existing_index=index, force_new=False)
+    assert index == {"記事A": ["999"]}
+
+
+def test_publish_draft_second_same_title_suppressed_in_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """同名の新規ドラフトを同じ索引で続けて送ると，2 件目は重複 POST しない．"""
+    calls: list[str] = []
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        calls.append(method)
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p1 = tmp_path / "2026-06-21-a.md"
+    p1.write_text('---\ndraft_of: "記事 A"\n---\n本文1\n', encoding="utf-8")
+    p2 = tmp_path / "2026-06-21-b.md"
+    p2.write_text('---\ndraft_of: "記事 A"\n---\n本文2\n', encoding="utf-8")
+    index: dict[str, list[str]] = {}
+    publish.publish_draft(p1, "u", "b", "k", existing_index=index, force_new=False)
+    publish.publish_draft(p2, "u", "b", "k", existing_index=index, force_new=False)
+    assert calls == ["POST"]
+    assert "hatena_entry_id" not in p2.read_text(encoding="utf-8")
+
+
+# ---------- verify_entries の戻り値（entry_exists をモック） ----------
+
+
+def _draft_with_id(tmp_path: Path, entry_id: str) -> Path:
+    p = tmp_path / f"2026-06-21-{entry_id or 'noid'}.md"
+    fm = f'hatena_entry_id: "{entry_id}"\n' if entry_id else ""
+    p.write_text(f"---\n{fm}---\n本文\n", encoding="utf-8")
+    return p
+
+
+def test_verify_entries_true_when_all_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """全 ID が実在すれば True を返す．"""
+    monkeypatch.setattr(publish, "entry_exists", lambda u, b, k, i: True)
+    p = _draft_with_id(tmp_path, "123")
+    assert publish.verify_entries([p], "u", "b", "k") is True
+
+
+def test_verify_entries_false_on_missing_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """404（欠落）が 1 件でもあれば False を返す．"""
+    monkeypatch.setattr(publish, "entry_exists", lambda u, b, k, i: False)
+    p = _draft_with_id(tmp_path, "123")
+    assert publish.verify_entries([p], "u", "b", "k") is False
+
+
+def test_verify_entries_missing_id_is_not_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """hatena_entry_id 未設定は未送信・未回収の通常状態で，失敗に数えない．"""
+
+    def boom(u: str, b: str, k: str, i: str) -> bool:
+        raise AssertionError("ID なしで entry_exists を呼んではならない")
+
+    monkeypatch.setattr(publish, "entry_exists", boom)
+    p = _draft_with_id(tmp_path, "")
+    assert publish.verify_entries([p], "u", "b", "k") is True
+
+
+def test_verify_entries_false_on_http_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HTTP エラーは検証不能として False を返す（中断はしない）．"""
+
+    def boom(u: str, b: str, k: str, i: str) -> bool:
+        raise urllib.error.HTTPError("url", 500, "Server Error", {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(publish, "entry_exists", boom)
+    p = _draft_with_id(tmp_path, "123")
+    assert publish.verify_entries([p], "u", "b", "k") is False
