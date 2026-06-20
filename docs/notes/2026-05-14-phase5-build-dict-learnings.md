@@ -2,8 +2,8 @@
 
 ## 背景
 
-PR #21 で `build_dictionary.py` を TDD で実装し，Gemini Code Assist のレビューに
-対応した際に得た知見をまとめる．
+PR #21 で `build_dictionary.py` を TDD で実装した．
+Gemini Code Assist のレビュー対応で得た知見をまとめる．
 
 ## 学びと知見
 
@@ -66,7 +66,7 @@ CLAUDE.md または `github-dev` Skill にスクリプト使用を必須化す�
 
 いずれもスクリプト全体の続行が不可能なため，`sys.exit(1)` で終了する設計が
 適切である．`main()` 側で `vocab_path.exists()` チェックを行っていても，
-パーミッションエラーは防げないため，ファイル読み込み層での捕捉が必要になる．
+パーミッションエラーは防げない．そのため，ファイル読み込み層での捕捉が必要になる．
 
 ```python
 try:
