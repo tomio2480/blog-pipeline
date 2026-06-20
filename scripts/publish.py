@@ -291,7 +291,11 @@ def build_title_index(entries: list[dict]) -> dict[str, list[str]]:
         if not key:
             # 空タイトルは照合キーにしない（空文字列キーへの誤集約・誤一致を防ぐ）．
             continue
-        index.setdefault(key, []).append(entry.get("entry_id", ""))
+        entry_id = entry.get("entry_id") or ""
+        if not entry_id:
+            # entry_id が空のエントリは照合・書き戻しの対象にしない．
+            continue
+        index.setdefault(key, []).append(entry_id)
     return index
 
 
@@ -387,7 +391,12 @@ def entry_exists(
     HTTP 200 → True，404 → False．それ以外の `HTTPError` は再送出する．
     コレクションフィードは結果整合で取りこぼしがあるため，削除・再投稿などの
     破壊的判断はこのメンバー `GET` を根拠にする．
+
+    `entry_id` が空・空白のみの場合はメンバー URI が作れず，コレクション URI への
+    `GET`（フィード）に化けて 200 を誤って返すため，先に False を返す．
     """
+    if not entry_id or not entry_id.strip():
+        return False
     url = build_member_url(username, blog_id, entry_id)
     req = urllib.request.Request(
         url,

@@ -237,7 +237,7 @@ python scripts/publish.py drafts/2026-05-07-my-article.md --env-file /path/to/.e
 python scripts/publish.py drafts/*.md --sync
 ```
 
-`--verify` は送信せず，各ドラフトの `hatena_entry_id` をメンバー `GET`（`/atom/entry/{id}` の 200／404）で検証する．コレクションフィードは結果整合で取りこぼすため，存在確認はメンバー `GET` を正本とする．
+`--verify` は送信せず，各ドラフトの `hatena_entry_id` をメンバー `GET`（200／404）で検証する．コレクションフィードは結果整合で取りこぼすため，存在確認はメンバー `GET`（`/atom/entry/{id}`）を正本とする．
 
 ```bash
 python scripts/publish.py drafts/*.md --verify

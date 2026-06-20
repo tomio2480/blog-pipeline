@@ -437,6 +437,19 @@ class _FakeResp:
         return b""
 
 
+def test_entry_exists_false_for_empty_id_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """空・空白のみの entry_id はネットワークに出ず False を返す（誤検出防止）．"""
+
+    def boom(req: object, timeout: int = 30) -> _FakeResp:
+        raise AssertionError("urlopen は呼ばれてはならない")
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", boom)
+    assert entry_exists("u", "b", "k", "") is False
+    assert entry_exists("u", "b", "k", "   ") is False
+
+
 def test_entry_exists_true_on_200(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_urlopen(req: object, timeout: int = 30) -> _FakeResp:
         return _FakeResp()
@@ -468,6 +481,15 @@ def test_entry_exists_raises_on_other_http_error(monkeypatch: pytest.MonkeyPatch
 def test_build_title_index_skips_empty_title() -> None:
     entries = [{"entry_id": "1", "title": "  ", "draft": True}]
     assert build_title_index(entries) == {}
+
+
+def test_build_title_index_skips_empty_entry_id() -> None:
+    """entry_id が空のエントリは索引に載せない（空 ID の誤書き戻しを防ぐ）．"""
+    entries = [
+        {"entry_id": "", "title": "記事 A", "draft": True},
+        {"entry_id": "2", "title": "記事 A", "draft": True},
+    ]
+    assert build_title_index(entries) == {"記事A": ["2"]}
 
 
 def test_find_title_matches_empty_title_never_matches() -> None:
