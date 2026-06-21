@@ -798,7 +798,10 @@ def transform_body_images(
             raise ValueError(
                 f"画像パスに親ディレクトリ参照（..）は使えません: {target}"
             )
-        fid = upload_fn(base_dir / target)
+        # Windows 区切り（`\`）を `/` へ正規化し，非 Windows 環境でも参照できる
+        # ようにする．Markdown は `/` 区切りが通例だが，著者が `\` を書いても拾う．
+        normalized = PureWindowsPath(target).as_posix()
+        fid = upload_fn(base_dir / normalized)
         return render_image_figure(alt=alt, caption=caption, fid=fid)
 
     return _IMAGE_MD_PATTERN.sub(replace, body)
@@ -896,13 +899,17 @@ def publish_draft(
 
     # 本文確定前処理: 本文中の Markdown 画像をフォトライフへ上げ figure へ置換する．
     # 送信が確定したドラフトに対してのみ実行し，抑止・スキップ時の無駄な通信を避ける．
-    body = transform_body_images(
-        body,
-        base_dir=draft_path.parent,
-        upload_fn=lambda image_path: upload_image(
-            image_path, username, api_key, map_path=upload_map_path
-        ),
-    )
+    # バッチ処理でどのドラフトが原因か特定できるよう，失敗はパス付きで再送出する．
+    try:
+        body = transform_body_images(
+            body,
+            base_dir=draft_path.parent,
+            upload_fn=lambda image_path: upload_image(
+                image_path, username, api_key, map_path=upload_map_path
+            ),
+        )
+    except (ValueError, OSError) as exc:
+        raise ValueError(f"{draft_path}: 画像の処理に失敗しました: {exc}") from exc
 
     entry_xml = build_atom_entry(title, body, categories)
     if method == "PUT":

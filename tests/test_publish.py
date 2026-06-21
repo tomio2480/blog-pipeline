@@ -1411,6 +1411,21 @@ def test_transform_body_images_handles_parens_in_path(tmp_path: Path) -> None:
     assert out == "<figure>\n[f:id:u:1:image:alt=代替]\n</figure>\n"
 
 
+def test_transform_body_images_normalizes_backslash_path(tmp_path: Path) -> None:
+    """Windows 区切り（\\）のパスは / へ正規化してアップロードする．"""
+    calls: list[Path] = []
+
+    def fake_upload(path: Path) -> str:
+        calls.append(path)
+        return "f:id:u:1:image"
+
+    out = transform_body_images(
+        "![代替](assets\\sub\\a.png)\n", base_dir=tmp_path, upload_fn=fake_upload
+    )
+    assert calls == [tmp_path / "assets" / "sub" / "a.png"]
+    assert out == "<figure>\n[f:id:u:1:image:alt=代替]\n</figure>\n"
+
+
 def test_transform_body_images_rejects_absolute_path(tmp_path: Path) -> None:
     def boom(path: Path) -> str:
         raise AssertionError("絶対パスはアップロードしてはならない")
@@ -1472,3 +1487,19 @@ def test_publish_draft_embeds_local_image(
     assert "f:id:u:999:image:alt=代替" in body_xml
     assert "figcaption" in body_xml
     assert 'hatena_entry_id: "555"' in draft.read_text(encoding="utf-8")
+
+
+def test_publish_draft_image_error_includes_draft_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """画像処理の失敗は，どのドラフトが原因かパス付きで再送出される．"""
+    draft = tmp_path / "2026-06-21-bad.md"
+    draft.write_text(
+        '---\ndraft_of: "画像記事"\n---\n![](a.png)\n', encoding="utf-8"
+    )
+    monkeypatch.setattr(
+        publish, "_send_entry", lambda *a, **k: b"<id>tag:...-1</id>"
+    )
+    with pytest.raises(ValueError) as excinfo:
+        publish.publish_draft(draft, "u", "b", "k")
+    assert str(draft) in str(excinfo.value)
