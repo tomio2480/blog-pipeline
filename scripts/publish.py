@@ -212,6 +212,10 @@ def parse_frontmatter(
     i = 0
     while i < n:
         line = fm_lines[i]
+        # コメント行（`#` 始まり）はコロンを含んでもキーにしない．
+        if line.strip().startswith("#"):
+            i += 1
+            continue
         # キー行は行頭が空白・タブ・`-` でなく `:` を含む．
         if ":" in line and not line.startswith((" ", "\t", "-")):
             key, _, value = line.partition(":")
@@ -223,10 +227,14 @@ def parse_frontmatter(
                 continue
             if value == "":
                 # ブロック形式の配列を先読みする（`  - item` 行の連続）．
+                # 要素間の空行・コメント行は読み飛ばし，次のキー行で止める．
                 items: list[str] = []
                 j = i + 1
                 while j < n:
                     nxt = fm_lines[j].strip()
+                    if not nxt or nxt.startswith("#"):
+                        j += 1
+                        continue
                     if nxt.startswith("-"):
                         item = _strip_matching_quotes(nxt[1:].strip()).strip()
                         if item:

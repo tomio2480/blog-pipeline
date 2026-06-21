@@ -747,6 +747,45 @@ def test_parse_frontmatter_block_list_stops_at_next_key() -> None:
     assert fm["media"] == "hatena"
 
 
+def test_parse_frontmatter_block_list_skips_blank_lines() -> None:
+    """ブロック配列の要素間に空行があっても以降の要素を取りこぼさない．"""
+    text = (
+        "---\n"
+        "categories:\n"
+        "  - PHP\n"
+        "\n"
+        "  - コミュニティ\n"
+        "media: hatena\n"
+        "---\n"
+        "body\n"
+    )
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+    assert fm["media"] == "hatena"
+
+
+def test_parse_frontmatter_block_list_skips_comment_lines() -> None:
+    """ブロック配列の要素間にコメント行（`#`）があっても取りこぼさない．"""
+    text = (
+        "---\n"
+        "categories:\n"
+        "  - PHP\n"
+        "  # 補足コメント\n"
+        "  - コミュニティ\n"
+        "---\n"
+        "body\n"
+    )
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+
+
+def test_parse_frontmatter_skips_root_comment_with_colon() -> None:
+    """ルートのコロンを含むコメント行をキーとして誤解析しない．"""
+    text = "---\n# これはコメント: コロン入り\ndraft_of: t\n---\nbody\n"
+    fm, _ = parse_frontmatter(text)
+    assert fm == {"draft_of": "t"}
+
+
 def test_parse_frontmatter_scalar_still_string() -> None:
     """配列でないキーは従来どおり文字列のまま（後方互換）．"""
     text = "---\ndraft_of: t\nmedia: hatena\n---\nbody\n"
