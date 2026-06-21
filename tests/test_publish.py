@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import urllib.error
 import urllib.request
@@ -19,22 +20,27 @@ from publish import (
     build_atom_entry,
     build_category_url,
     build_collection_url,
+    build_fotolife_entry,
     build_member_url,
     build_title_index,
     build_wsse_header,
     decide_publish_method,
+    detect_image_content_type,
     entry_exists,
     extract_entry_id,
+    extract_fotolife_syntax,
     fetch_categories,
     find_title_matches,
     get_env,
     list_categories,
     load_env_file,
+    load_upload_map,
     normalize_categories,
     normalize_title,
     parse_category_document,
     parse_collection_feed,
     parse_frontmatter,
+    save_upload_map,
     should_suppress_new_post,
     upsert_frontmatter_field,
 )
@@ -1026,3 +1032,215 @@ def test_list_categories_empty_prints_nothing(
     list_categories("u", "b", "k")
     captured = capsys.readouterr()
     assert captured.out == ""
+
+
+# ---------- detect_image_content_type ----------
+
+_JPEG_MAGIC = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00"
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+_GIF_MAGIC = b"GIF89a\x01\x00\x01\x00"
+
+
+def test_detect_image_content_type_jpeg_by_magic() -> None:
+    assert detect_image_content_type(_JPEG_MAGIC) == "image/jpeg"
+
+
+def test_detect_image_content_type_png_by_magic() -> None:
+    assert detect_image_content_type(_PNG_MAGIC) == "image/png"
+
+
+def test_detect_image_content_type_gif_by_magic() -> None:
+    assert detect_image_content_type(b"GIF87a\x00\x00") == "image/gif"
+    assert detect_image_content_type(_GIF_MAGIC) == "image/gif"
+
+
+def test_detect_image_content_type_extension_fallback() -> None:
+    """マジックバイトで判定できなくても拡張子から判定する（大文字も許容）．"""
+    assert (
+        detect_image_content_type(b"\x00\x01\x02\x03", filename="photo.JPG")
+        == "image/jpeg"
+    )
+    assert (
+        detect_image_content_type(b"\x00\x01\x02\x03", filename="photo.PNG")
+        == "image/png"
+    )
+    assert (
+        detect_image_content_type(b"\x00\x01\x02\x03", filename="photo.GIF")
+        == "image/gif"
+    )
+
+
+def test_detect_image_content_type_rejects_unknown() -> None:
+    with pytest.raises(ValueError):
+        detect_image_content_type(b"\x00\x01\x02\x03", filename="data.txt")
+    with pytest.raises(ValueError):
+        detect_image_content_type(b"\x00\x01\x02\x03")
+
+
+# ---------- build_fotolife_entry ----------
+
+
+def test_build_fotolife_entry_includes_base64_content() -> None:
+    xml = build_fotolife_entry(b"hello", "image/png", "タイトル").decode("utf-8")
+    assert 'xmlns="http://purl.org/atom/ns#"' in xml
+    assert "<title>タイトル</title>" in xml
+    assert '<content mode="base64" type="image/png">' in xml
+    assert base64.b64encode(b"hello").decode("ascii") in xml
+
+
+def test_build_fotolife_entry_sets_folder_via_dc_subject() -> None:
+    xml = build_fotolife_entry(b"x", "image/jpeg", "t", folder="blog").decode("utf-8")
+    assert (
+        '<dc:subject xmlns:dc="http://purl.org/dc/elements/1.1/">blog</dc:subject>'
+        in xml
+    )
+
+
+def test_build_fotolife_entry_omits_subject_when_folder_empty() -> None:
+    xml = build_fotolife_entry(b"x", "image/jpeg", "t", folder="").decode("utf-8")
+    assert "dc:subject" not in xml
+
+
+def test_build_fotolife_entry_escapes_title() -> None:
+    xml = build_fotolife_entry(b"x", "image/png", "a & <b>").decode("utf-8")
+    assert "a &amp; &lt;b&gt;" in xml
+
+
+# ---------- extract_fotolife_syntax ----------
+
+
+def test_extract_fotolife_syntax_returns_fid() -> None:
+    resp = (
+        b'<entry xmlns:hatena="http://www.hatena.ne.jp/info/xmlns#">'
+        b"<hatena:syntax>f:id:naoya:20060101120000:image</hatena:syntax></entry>"
+    )
+    assert extract_fotolife_syntax(resp) == "f:id:naoya:20060101120000:image"
+
+
+def test_extract_fotolife_syntax_empty_when_absent() -> None:
+    assert extract_fotolife_syntax(b"<entry></entry>") == ""
+
+
+def test_extract_fotolife_syntax_handles_other_prefix() -> None:
+    """名前空間接頭辞が変わっても要素のローカル名で取り出せる．"""
+    resp = (
+        b'<entry xmlns:h="http://www.hatena.ne.jp/info/xmlns#">'
+        b"<h:syntax>f:id:u:1:image</h:syntax></entry>"
+    )
+    assert extract_fotolife_syntax(resp) == "f:id:u:1:image"
+
+
+def test_extract_fotolife_syntax_empty_on_malformed_xml() -> None:
+    """整形式でない XML は空文字を返す（呼び出し側がアップロード失敗を判定する）．"""
+    assert extract_fotolife_syntax(b"<entry><hatena:syntax>broken") == ""
+
+
+# ---------- load_upload_map / save_upload_map ----------
+
+
+def test_load_upload_map_missing_returns_empty(tmp_path: Path) -> None:
+    assert load_upload_map(tmp_path / "nope.json") == {}
+
+
+def test_save_then_load_upload_map_roundtrip(tmp_path: Path) -> None:
+    p = tmp_path / "uploads.json"
+    save_upload_map(p, {"abc": "f:id:u:1:image"})
+    assert load_upload_map(p) == {"abc": "f:id:u:1:image"}
+
+
+def test_save_upload_map_creates_parent_dirs(tmp_path: Path) -> None:
+    """親ディレクトリが無くても作成して書き込む（FileNotFoundError を防ぐ）．"""
+    p = tmp_path / "nested" / "dir" / "uploads.json"
+    save_upload_map(p, {"abc": "f:id:u:1:image"})
+    assert load_upload_map(p) == {"abc": "f:id:u:1:image"}
+
+
+def test_load_upload_map_wraps_corrupt_json_with_path(tmp_path: Path) -> None:
+    """壊れた JSON は ValueError とし，メッセージにパスを含める（識別容易化）．"""
+    p = tmp_path / "uploads.json"
+    p.write_text("{not valid json", encoding="utf-8")
+    with pytest.raises(ValueError) as exc:
+        load_upload_map(p)
+    assert str(p) in str(exc.value)
+
+
+def test_load_upload_map_empty_file_returns_empty(tmp_path: Path) -> None:
+    p = tmp_path / "uploads.json"
+    p.write_text("", encoding="utf-8")
+    assert load_upload_map(p) == {}
+
+
+def test_load_upload_map_rejects_non_dict(tmp_path: Path) -> None:
+    p = tmp_path / "uploads.json"
+    p.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_upload_map(p)
+
+
+def test_load_upload_map_rejects_non_str_value(tmp_path: Path) -> None:
+    """値が文字列でない記録は破損とみなして弾く（型の暗黙伝播を防ぐ）．"""
+    p = tmp_path / "uploads.json"
+    p.write_text('{"abc": 123}', encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_upload_map(p)
+
+
+# ---------- upload_image（ネットワークはモック） ----------
+
+_FOTOLIFE_RESP = (
+    b'<entry xmlns="http://purl.org/atom/ns#" '
+    b'xmlns:hatena="http://www.hatena.ne.jp/info/xmlns#">'
+    b"<hatena:syntax>f:id:testuser:20260621120000:image</hatena:syntax>"
+    b"</entry>"
+)
+_PNG_IMAGE = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDRbody"
+
+
+def test_upload_image_posts_and_returns_syntax(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    img = tmp_path / "pic.png"
+    img.write_bytes(_PNG_IMAGE)
+    calls: list[tuple[str, str]] = []
+
+    def fake_send(
+        url: str, entry_xml: bytes, username: str, api_key: str, method: str
+    ) -> bytes:
+        calls.append((url, method))
+        return _FOTOLIFE_RESP
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    syntax = publish.upload_image(img, "testuser", "key")
+    assert syntax == "f:id:testuser:20260621120000:image"
+    assert calls == [("https://f.hatena.ne.jp/atom/post", "POST")]
+
+
+def test_upload_image_skips_when_already_uploaded(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """同一内容の画像は記録を参照して再アップロードしない．"""
+    img = tmp_path / "pic.png"
+    img.write_bytes(_PNG_IMAGE)
+    map_path = tmp_path / "uploads.json"
+
+    monkeypatch.setattr(
+        publish, "_send_entry", lambda *a, **k: _FOTOLIFE_RESP
+    )
+    first = publish.upload_image(img, "testuser", "key", map_path=map_path)
+
+    def boom(*a: object, **k: object) -> bytes:
+        raise AssertionError("二重アップロードしてはならない")
+
+    monkeypatch.setattr(publish, "_send_entry", boom)
+    second = publish.upload_image(img, "testuser", "key", map_path=map_path)
+    assert first == second == "f:id:testuser:20260621120000:image"
+
+
+def test_upload_image_raises_when_no_syntax(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    img = tmp_path / "pic.png"
+    img.write_bytes(_PNG_IMAGE)
+    monkeypatch.setattr(publish, "_send_entry", lambda *a, **k: b"<entry></entry>")
+    with pytest.raises(ValueError):
+        publish.upload_image(img, "testuser", "key")
