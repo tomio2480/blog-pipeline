@@ -32,6 +32,7 @@ from publish import (
     fetch_categories,
     find_title_matches,
     get_env,
+    is_external_image,
     list_categories,
     load_env_file,
     load_upload_map,
@@ -40,8 +41,10 @@ from publish import (
     parse_category_document,
     parse_collection_feed,
     parse_frontmatter,
+    render_image_figure,
     save_upload_map,
     should_suppress_new_post,
+    transform_body_images,
     upsert_frontmatter_field,
 )
 
@@ -1244,3 +1247,188 @@ def test_upload_image_raises_when_no_syntax(
     monkeypatch.setattr(publish, "_send_entry", lambda *a, **k: b"<entry></entry>")
     with pytest.raises(ValueError):
         publish.upload_image(img, "testuser", "key")
+
+
+# ---------- is_external_image ----------
+
+
+def test_is_external_image_true_for_http_and_https() -> None:
+    assert is_external_image("http://example.com/a.png") is True
+    assert is_external_image("https://example.com/a.png") is True
+
+
+def test_is_external_image_false_for_relative_path() -> None:
+    assert is_external_image("assets/a.png") is False
+    assert is_external_image("./a.png") is False
+    assert is_external_image("/abs/a.png") is False
+
+
+# ---------- render_image_figure ----------
+
+
+def test_render_image_figure_fid_with_caption() -> None:
+    html_out = render_image_figure(
+        alt="代替テキスト",
+        caption="図の説明",
+        fid="f:id:u:20260621120000:image",
+    )
+    assert html_out == (
+        "<figure>\n"
+        "[f:id:u:20260621120000:image:alt=代替テキスト]\n"
+        "<figcaption>図の説明</figcaption>\n"
+        "</figure>"
+    )
+
+
+def test_render_image_figure_fid_without_caption_still_wraps_figure() -> None:
+    html_out = render_image_figure(alt="代替", fid="f:id:u:1:image")
+    assert html_out == (
+        "<figure>\n[f:id:u:1:image:alt=代替]\n</figure>"
+    )
+
+
+def test_render_image_figure_external_uses_img_and_escapes() -> None:
+    html_out = render_image_figure(
+        alt="A & B",
+        caption="<b>注</b>",
+        src="https://example.com/a.png?x=1&y=2",
+    )
+    assert html_out == (
+        "<figure>\n"
+        '<img src="https://example.com/a.png?x=1&amp;y=2" alt="A &amp; B">\n'
+        "<figcaption>&lt;b&gt;注&lt;/b&gt;</figcaption>\n"
+        "</figure>"
+    )
+
+
+def test_render_image_figure_empty_alt_raises() -> None:
+    with pytest.raises(ValueError):
+        render_image_figure(alt="", fid="f:id:u:1:image")
+    with pytest.raises(ValueError):
+        render_image_figure(alt="   ", src="https://example.com/a.png")
+
+
+def test_render_image_figure_requires_exactly_one_of_fid_src() -> None:
+    with pytest.raises(ValueError):
+        render_image_figure(alt="x")
+    with pytest.raises(ValueError):
+        render_image_figure(alt="x", fid="f:id:u:1:image", src="https://e/a.png")
+
+
+def test_render_image_figure_fid_alt_with_breaking_chars_raises() -> None:
+    with pytest.raises(ValueError):
+        render_image_figure(alt="a:b", fid="f:id:u:1:image")
+    with pytest.raises(ValueError):
+        render_image_figure(alt="a]b", fid="f:id:u:1:image")
+
+
+# ---------- transform_body_images ----------
+
+
+def test_transform_body_images_local_uploads_and_replaces(tmp_path: Path) -> None:
+    calls: list[Path] = []
+
+    def fake_upload(path: Path) -> str:
+        calls.append(path)
+        return "f:id:u:111:image"
+
+    body = '前文\n\n![代替](assets/a.png "説明")\n\n後文\n'
+    out = transform_body_images(body, base_dir=tmp_path, upload_fn=fake_upload)
+    assert calls == [tmp_path / "assets/a.png"]
+    assert "<figure>\n[f:id:u:111:image:alt=代替]\n<figcaption>説明</figcaption>\n</figure>" in out
+    assert "前文" in out and "後文" in out
+    assert "![代替]" not in out
+
+
+def test_transform_body_images_local_without_caption(tmp_path: Path) -> None:
+    out = transform_body_images(
+        "![代替](a.png)\n", base_dir=tmp_path, upload_fn=lambda p: "f:id:u:1:image"
+    )
+    assert out == "<figure>\n[f:id:u:1:image:alt=代替]\n</figure>\n"
+
+
+def test_transform_body_images_external_not_uploaded(tmp_path: Path) -> None:
+    calls: list[Path] = []
+
+    def fake_upload(path: Path) -> str:
+        calls.append(path)
+        return "f:id:u:1:image"
+
+    body = '![外部](https://example.com/a.png "外部説明")\n'
+    out = transform_body_images(body, base_dir=tmp_path, upload_fn=fake_upload)
+    assert calls == []
+    assert '<img src="https://example.com/a.png" alt="外部">' in out
+    assert "<figcaption>外部説明</figcaption>" in out
+
+
+def test_transform_body_images_multiple_mixed(tmp_path: Path) -> None:
+    calls: list[Path] = []
+
+    def fake_upload(path: Path) -> str:
+        calls.append(path)
+        return f"f:id:u:{len(calls)}:image"
+
+    body = (
+        "![一](local1.png)\n"
+        "![二](https://example.com/x.png)\n"
+        '![三](sub/local2.png "三の説明")\n'
+    )
+    out = transform_body_images(body, base_dir=tmp_path, upload_fn=fake_upload)
+    assert calls == [tmp_path / "local1.png", tmp_path / "sub/local2.png"]
+    assert "[f:id:u:1:image:alt=一]" in out
+    assert '<img src="https://example.com/x.png" alt="二">' in out
+    assert "[f:id:u:2:image:alt=三]" in out
+    assert "<figcaption>三の説明</figcaption>" in out
+
+
+def test_transform_body_images_missing_alt_raises_before_upload(
+    tmp_path: Path,
+) -> None:
+    def boom(path: Path) -> str:
+        raise AssertionError("alt 欠落時はアップロードしてはならない")
+
+    with pytest.raises(ValueError):
+        transform_body_images("![](a.png)\n", base_dir=tmp_path, upload_fn=boom)
+
+
+def test_transform_body_images_no_images_unchanged(tmp_path: Path) -> None:
+    body = "画像のない本文です．\n\n通常の段落．\n"
+    out = transform_body_images(
+        body, base_dir=tmp_path, upload_fn=lambda p: "f:id:u:1:image"
+    )
+    assert out == body
+
+
+# ---------- publish_draft の画像処理統合（_send_entry をモック） ----------
+
+
+def test_publish_draft_embeds_local_image(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """本文の Markdown 画像が POST 前にアップロード＋figure 置換される．"""
+    img = tmp_path / "a.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+    draft = tmp_path / "2026-06-21-img.md"
+    draft.write_text(
+        '---\ndraft_of: "画像記事"\n---\n![代替](a.png "説明")\n',
+        encoding="utf-8",
+    )
+
+    sent: dict[str, bytes] = {}
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        if url == publish.FOTOLIFE_POST_URL:
+            return (
+                b'<entry xmlns:hatena="http://www.hatena.ne.jp/info/xmlns#">'
+                b"<hatena:syntax>f:id:u:999:image</hatena:syntax></entry>"
+            )
+        sent["body"] = xml
+        return b"<id>tag:...-555</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    publish.publish_draft(draft, "u", "b", "k")
+
+    body_xml = sent["body"].decode("utf-8")
+    assert "f:id:u:999:image:alt=代替" in body_xml
+    assert "figcaption" in body_xml
+    assert 'hatena_entry_id: "555"' in draft.read_text(encoding="utf-8")

@@ -16,6 +16,9 @@
   意図的に新規作成する場合は `--force-new` を付ける．
 - 存在確認はメンバー `GET`（`/atom/entry/{id}` の 200／404）を正本とする．
   コレクションフィードは結果整合で取りこぼすため，破壊的判断の根拠にしない．
+- 送信前に本文の Markdown 画像記法 `![alt](path "caption")` を処理する．
+  ローカル相対パスはフォトライフへアップロードし f:id 記法へ，外部 URL は `<img>` へ，
+  いずれも `<figure>` / `<figcaption>` で包む．alt は a11y 必須で欠落はエラーとする．
 - 環境変数（HATENA_USERNAME / HATENA_BLOG_ID / HATENA_API_KEY）は
   `--env-file`（既定: `.env`）から読み込む．
   環境変数に既に設定済みの場合はそちらを優先する（os.environ 優先）．
@@ -28,6 +31,7 @@
     python scripts/publish.py drafts/*.md --sync     # ID 回収のみ（送信しない）
     python scripts/publish.py drafts/*.md --verify   # ID の実在をメンバー GET で検証
     python scripts/publish.py drafts/new.md --force-new  # 重複抑止を無視して新規 POST
+    python scripts/publish.py drafts/a.md --upload-map .upload_map.json  # 画像の再上げ抑止
     python scripts/publish.py --list-categories      # 既存カテゴリー term 一覧を出力
 
 出力:
@@ -49,6 +53,7 @@ import sys
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -88,6 +93,16 @@ _IMAGE_EXT_CONTENT_TYPE = {
     ".png": "image/png",
     ".gif": "image/gif",
 }
+
+# 本文中の Markdown 画像記法 `![alt](target "caption")` を検出する正規表現．
+# target は空白・丸括弧を含まない 1 トークン（相対パスまたは URL）．
+# caption は省略可で，直前に空白を挟み二重引用符または単一引用符で囲む．
+_IMAGE_MD_PATTERN = re.compile(
+    r"!\[(?P<alt>[^\]]*)\]"
+    r"\(\s*(?P<target>[^\s()]+)"
+    r"(?:\s+\"(?P<caption_d>[^\"]*)\"|\s+'(?P<caption_s>[^']*)')?"
+    r"\s*\)"
+)
 
 
 def build_collection_url(username: str, blog_id: str) -> str:
@@ -691,6 +706,88 @@ def upload_image(
     return syntax
 
 
+def is_external_image(target: str) -> bool:
+    """画像の参照先が外部 URL かどうかを判定する（http / https のみ外部とみなす）．
+
+    外部 URL はアップロード対象外とし，本文からそのまま `<img>` で参照する．
+    """
+    return target.startswith(("http://", "https://"))
+
+
+def render_image_figure(
+    *,
+    alt: str,
+    caption: str | None = None,
+    fid: str | None = None,
+    src: str | None = None,
+) -> str:
+    """画像 1 件分の `<figure>` ブロックを生成する．
+
+    `fid`（フォトライフの f:id 記法）か `src`（外部 URL）のどちらか一方を渡す．
+    `fid` のときは `[f:id:...:image:alt=...]`，`src` のときは `<img>` を出力する．
+    `caption` があれば `<figcaption>` を付ける．caption が無くても `<figure>` で包む．
+
+    alt はアクセシビリティ上の必須項目とし，空・空白のみは `ValueError`．
+    f:id 記法の alt オプションはコロン（:）と閉じ括弧（]）を区切りに使うため，
+    これらを含む alt は記法を壊す．早期に `ValueError` で弾き，壊れた投稿を防ぐ．
+    """
+    if not alt or not alt.strip():
+        raise ValueError("画像の alt（代替テキスト）が空です．alt は必須です．")
+    if (fid is None) == (src is None):
+        raise ValueError(
+            "render_image_figure には fid と src のどちらか一方のみ指定してください．"
+        )
+
+    lines = ["<figure>"]
+    if fid is not None:
+        if "]" in alt or ":" in alt:
+            raise ValueError(
+                "f:id 記法の alt にコロン（:）と閉じ括弧（]）は使えません: "
+                f"{alt!r}"
+            )
+        lines.append(f"[{fid}:alt={alt}]")
+    else:
+        src_esc = html.escape(src, quote=True)  # type: ignore[arg-type]
+        alt_esc = html.escape(alt, quote=True)
+        lines.append(f'<img src="{src_esc}" alt="{alt_esc}">')
+    if caption:
+        lines.append(f"<figcaption>{html.escape(caption)}</figcaption>")
+    lines.append("</figure>")
+    return "\n".join(lines)
+
+
+def transform_body_images(
+    body: str,
+    *,
+    base_dir: Path,
+    upload_fn: Callable[[Path], str],
+) -> str:
+    """本文の Markdown 画像記法を `<figure>` へ置換する（本文確定前処理）．
+
+    ローカル相対パスの画像は `base_dir` 起点で解決し，`upload_fn` でフォトライフへ
+    アップロードして f:id 記法へ置換する．外部 URL 画像はアップロードせず `<img>` で
+    そのまま参照する．caption（Markdown のタイトル文字列）は `<figcaption>` にする．
+
+    alt は a11y 必須とし，欠落時は `ValueError`．ローカル画像はアップロード前に
+    alt を検証し，無駄な通信を避ける．
+    """
+
+    def replace(match: re.Match[str]) -> str:
+        alt = match.group("alt")
+        target = match.group("target")
+        if not alt or not alt.strip():
+            raise ValueError(
+                f"画像の alt（代替テキスト）が空です．alt は必須です: {target}"
+            )
+        caption = match.group("caption_d") or match.group("caption_s")
+        if is_external_image(target):
+            return render_image_figure(alt=alt, caption=caption, src=target)
+        fid = upload_fn(base_dir / target)
+        return render_image_figure(alt=alt, caption=caption, fid=fid)
+
+    return _IMAGE_MD_PATTERN.sub(replace, body)
+
+
 def entry_exists(
     username: str,
     blog_id: str,
@@ -733,6 +830,7 @@ def publish_draft(
     *,
     existing_index: dict[str, list[str]] | None = None,
     force_new: bool = False,
+    upload_map_path: Path | None = None,
 ) -> None:
     """ドラフトを読み込み，frontmatter に応じて新規 POST か更新 PUT で送る．
 
@@ -779,6 +877,16 @@ def publish_draft(
             "あります．frontmatter を見直してください．",
             file=sys.stderr,
         )
+
+    # 本文確定前処理: 本文中の Markdown 画像をフォトライフへ上げ figure へ置換する．
+    # 送信が確定したドラフトに対してのみ実行し，抑止・スキップ時の無駄な通信を避ける．
+    body = transform_body_images(
+        body,
+        base_dir=draft_path.parent,
+        upload_fn=lambda image_path: upload_image(
+            image_path, username, api_key, map_path=upload_map_path
+        ),
+    )
 
     entry_xml = build_atom_entry(title, body, categories)
     if method == "PUT":
@@ -1026,6 +1134,13 @@ def main() -> None:
         action="store_true",
         help="送信せず，はてな側の既存カテゴリー term 一覧を 1 行 1 件で標準出力へ出す",
     )
+    parser.add_argument(
+        "--upload-map",
+        type=Path,
+        default=None,
+        help="画像アップロード記録（内容ハッシュ → f:id）の JSON パス．"
+        "指定すると同一画像の再アップロードを抑止する（既定: 記録しない）",
+    )
     args = parser.parse_args()
 
     selected_modes = [
@@ -1112,6 +1227,7 @@ def main() -> None:
                 api_key,
                 existing_index=existing_index,
                 force_new=args.force_new,
+                upload_map_path=args.upload_map,
             )
     except urllib.error.HTTPError as exc:
         body_text = exc.read().decode("utf-8", errors="replace")
