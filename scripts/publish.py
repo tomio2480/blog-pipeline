@@ -28,6 +28,7 @@
     python scripts/publish.py drafts/*.md --sync     # ID 回収のみ（送信しない）
     python scripts/publish.py drafts/*.md --verify   # ID の実在をメンバー GET で検証
     python scripts/publish.py drafts/new.md --force-new  # 重複抑止を無視して新規 POST
+    python scripts/publish.py --list-categories      # 既存カテゴリー term 一覧を出力
 
 出力:
 
@@ -696,6 +697,20 @@ def fetch_categories(
     return parse_category_document(xml_bytes)
 
 
+def list_categories(
+    username: str,
+    blog_id: str,
+    api_key: str,
+) -> None:
+    """既存カテゴリーの term 一覧を 1 行 1 件で標準出力へ出す．
+
+    本文からのカテゴリー選定（blog-private 側オーケストレーション）が，
+    既存カテゴリーを優先する入力として読み取るための窓口とする．
+    """
+    for term in fetch_categories(username, blog_id, api_key):
+        print(term)
+
+
 def sync_entry_ids(
     draft_paths: list[Path],
     username: str,
@@ -808,7 +823,7 @@ def main() -> None:
     parser.add_argument(
         "draft_file",
         type=Path,
-        nargs="+",
+        nargs="*",
         help="対象の Markdown ドラフトファイル（複数可）",
     )
     parser.add_argument(
@@ -832,17 +847,28 @@ def main() -> None:
         action="store_true",
         help="正規化タイトル一致の既存下書きがあっても抑止せず，新規 POST を強行する",
     )
+    parser.add_argument(
+        "--list-categories",
+        action="store_true",
+        help="送信せず，はてな側の既存カテゴリー term 一覧を 1 行 1 件で標準出力へ出す",
+    )
     args = parser.parse_args()
 
-    if args.sync and args.verify:
-        print("Error: --sync と --verify は同時に指定できません．", file=sys.stderr)
+    selected_modes = [
+        name
+        for name, on in (
+            ("--sync", args.sync),
+            ("--verify", args.verify),
+            ("--list-categories", args.list_categories),
+        )
+        if on
+    ]
+    if len(selected_modes) > 1:
+        print(
+            f"Error: {' と '.join(selected_modes)} は同時に指定できません．",
+            file=sys.stderr,
+        )
         sys.exit(2)
-
-    missing = [p for p in args.draft_file if not p.is_file()]
-    if missing:
-        for p in missing:
-            print(f"Error: ファイルが見つかりません: {p}", file=sys.stderr)
-        sys.exit(1)
 
     if args.env_file != Path(".env") and not args.env_file.is_file():
         print(
@@ -851,9 +877,33 @@ def main() -> None:
         )
         sys.exit(2)
 
+    if args.list_categories:
+        if args.draft_file:
+            print(
+                "Error: --list-categories はドラフトファイルを取りません．",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+    else:
+        if not args.draft_file:
+            print(
+                "Error: 対象のドラフトファイルを 1 つ以上指定してください．",
+                file=sys.stderr,
+            )
+            sys.exit(2)
+        missing = [p for p in args.draft_file if not p.is_file()]
+        if missing:
+            for p in missing:
+                print(f"Error: ファイルが見つかりません: {p}", file=sys.stderr)
+            sys.exit(1)
+
     username, blog_id, api_key = _load_credentials(args.env_file)
 
     try:
+        if args.list_categories:
+            list_categories(username, blog_id, api_key)
+            return
+
         if args.sync:
             sync_entry_ids(args.draft_file, username, blog_id, api_key)
             return
