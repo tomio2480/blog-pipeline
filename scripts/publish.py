@@ -623,6 +623,10 @@ def load_upload_map(path: Path) -> dict[str, str]:
         raise ValueError(
             f"アップロード記録の形式が不正です（最上位は辞書である必要があります）: {path}"
         )
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in data.items()):
+        raise ValueError(
+            f"アップロード記録の形式が不正です（キーと値は文字列である必要があります）: {path}"
+        )
     return data
 
 

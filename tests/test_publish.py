@@ -1060,6 +1060,14 @@ def test_detect_image_content_type_extension_fallback() -> None:
         detect_image_content_type(b"\x00\x01\x02\x03", filename="photo.JPG")
         == "image/jpeg"
     )
+    assert (
+        detect_image_content_type(b"\x00\x01\x02\x03", filename="photo.PNG")
+        == "image/png"
+    )
+    assert (
+        detect_image_content_type(b"\x00\x01\x02\x03", filename="photo.GIF")
+        == "image/gif"
+    )
 
 
 def test_detect_image_content_type_rejects_unknown() -> None:
@@ -1135,6 +1143,14 @@ def test_load_upload_map_empty_file_returns_empty(tmp_path: Path) -> None:
 def test_load_upload_map_rejects_non_dict(tmp_path: Path) -> None:
     p = tmp_path / "uploads.json"
     p.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(ValueError):
+        load_upload_map(p)
+
+
+def test_load_upload_map_rejects_non_str_value(tmp_path: Path) -> None:
+    """値が文字列でない記録は破損とみなして弾く（型の暗黙伝播を防ぐ）．"""
+    p = tmp_path / "uploads.json"
+    p.write_text('{"abc": 123}', encoding="utf-8")
     with pytest.raises(ValueError):
         load_upload_map(p)
 
