@@ -30,6 +30,7 @@
     python scripts/publish.py drafts/2026-05-07-my-article.md --env-file /path/to/.env
     python scripts/publish.py drafts/*.md --sync     # ID 回収のみ（送信しない）
     python scripts/publish.py drafts/*.md --verify   # ID の実在をメンバー GET で検証
+    python scripts/publish.py drafts/*.md --preview  # はてな整形後の本文を確認（送信しない）
     python scripts/publish.py drafts/new.md --force-new  # 重複抑止を無視して新規 POST
     python scripts/publish.py drafts/a.md --upload-map .upload_map.json  # 画像の再上げ抑止
     python scripts/publish.py --list-categories      # 既存カテゴリー term 一覧を出力
@@ -106,6 +107,24 @@ _IMAGE_MD_PATTERN = re.compile(
     r"(?:\s+\"(?P<caption_d>[^\"]*)\"|\s+'(?P<caption_s>[^']*)')?"
     r"\s*\)"
 )
+
+# 単独行の Markdown リンク `[テキスト](URL)` を検出する（行全体がリンクのときのみ）．
+# 行中にテキストを伴うインラインリンクは対象外とし，段落結合のみ行う．
+_STANDALONE_MD_LINK = re.compile(r"^\[[^\]]*\]\(\s*([^)\s]+?)\s*\)$")
+
+# 単独行の裸 URL（http / https）を検出する．
+_BARE_URL_PATTERN = re.compile(r"^https?://\S+$")
+
+# 箇条書きマーカー（`-` `*` `+` または `1.` `1)` 形式）を検出する．
+_LIST_MARKER_PATTERN = re.compile(r"^\s*([-*+]|\d+[.)])\s+")
+
+# はてな埋め込み記法（cite 付きでカード表示）．カード型リンクへ適用する．
+_HATENA_EMBED_TEMPLATE = "[{url}:embed:cite]"
+
+# 段落間に挟む区切り行．全角スペース 1 つに続けて半角スペース 2 つ．
+# 末尾の半角 2 つが Markdown の改行（<br>）として解釈され，全角スペースが
+# 空行に見える 1 行を作るため，はてなブログ上で段落間の余白が確保される．
+_PARAGRAPH_SPACER = "　  "
 
 
 def build_collection_url(username: str, blog_id: str) -> str:
@@ -760,6 +779,114 @@ def render_image_figure(
     return "\n".join(lines)
 
 
+def _split_body_blocks(body: str) -> list[str]:
+    """本文を空行区切りのブロックへ分割する（コードフェンス内の空行は保持）．
+
+    ``` または ~~~ で始まるフェンスは閉じるまで 1 ブロックとして扱い，
+    内部の空行で分割しない．それ以外は空行をブロック境界とする．
+    """
+    blocks: list[str] = []
+    current: list[str] = []
+    fence: str | None = None
+
+    def flush() -> None:
+        if current:
+            blocks.append("\n".join(current))
+            current.clear()
+
+    for line in body.split("\n"):
+        stripped = line.lstrip()
+        if fence is not None:
+            current.append(line)
+            if stripped.startswith(fence):
+                flush()
+                fence = None
+            continue
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            flush()
+            fence = stripped[:3]
+            current.append(line)
+            continue
+        if line.strip() == "":
+            flush()
+            continue
+        current.append(line)
+    flush()
+    return blocks
+
+
+def _classify_block(block: str) -> str:
+    """ブロックの種別（prose / link / image / verbatim）を返す．
+
+    prose は段落結合，link は埋め込み化の対象とする．image は後段の画像処理へ
+    委ねるため種別を分ける．見出し・箇条書き・コードフェンス・引用・HTML・表は
+    verbatim としてそのまま残す．
+    """
+    first = block.split("\n", 1)[0].lstrip()
+    if first.startswith("```") or first.startswith("~~~"):
+        return "verbatim"
+    if first.startswith("#") or first.startswith(">") or first.startswith("|"):
+        return "verbatim"
+    if first.startswith("!"):
+        return "image"
+    if first.startswith("<"):
+        return "verbatim"
+    if _LIST_MARKER_PATTERN.match(first):
+        return "verbatim"
+    if "\n" not in block:
+        text = block.strip()
+        if _STANDALONE_MD_LINK.match(text) or _BARE_URL_PATTERN.match(text):
+            return "link"
+    return "prose"
+
+
+def _render_block(kind: str, block: str) -> str:
+    """ブロック種別に応じて本文を整形する（prose は結合，link は埋め込み化）．"""
+    if kind == "prose":
+        # 段落内の改行（折り返し）を取り除き 1 行へ結合する．日本語は語間に
+        # 空白を入れないため空文字で連結し，末尾へ半角スペース 2 つを付ける．
+        joined = "".join(line.strip() for line in block.split("\n"))
+        return joined + "  "
+    if kind == "link":
+        text = block.strip()
+        match = _STANDALONE_MD_LINK.match(text)
+        url = match.group(1) if match else text
+        return _HATENA_EMBED_TEMPLATE.format(url=url)
+    return block
+
+
+def transform_hatena_body(body: str) -> str:
+    """本文をはてなブログの Markdown 表示に合わせて整形する（本文確定前処理）．
+
+    はてなブログの Markdown では段落内の単純な改行が不要な半角スペースになる．
+    そこで段落（連続する非空行）内の改行を取り除いて 1 行へ結合し，末尾へ
+    半角スペース 2 つを付けて明示的な改行とする．連続する段落の間には区切り行
+    `_PARAGRAPH_SPACER` を挟み，余白を確保する．
+
+    単独行のリンク（Markdown リンクまたは裸 URL）はカード型とみなし，はてなの
+    埋め込み記法 `[URL:embed:cite]` へ変換する．文中のインラインリンクは対象外．
+    見出し・箇条書き・画像・コードフェンス・引用・HTML・表は変換しない．
+    画像記法は後段の `transform_body_images` へ委ねるため，ここでは残す．
+    """
+    blocks = _split_body_blocks(body)
+    if not blocks:
+        return body
+
+    kinds = [_classify_block(b) for b in blocks]
+    rendered = [_render_block(k, b) for k, b in zip(kinds, blocks)]
+
+    parts = [rendered[0]]
+    for i in range(1, len(rendered)):
+        if kinds[i - 1] == "prose" and kinds[i] == "prose":
+            # 段落どうしは空行を挟まず，区切り行で連結して 1 つの段落塊に保つ．
+            parts.append(f"\n{_PARAGRAPH_SPACER}\n")
+        else:
+            # 段落以外（見出し・箇条書き・カード等）との境界は空行で区切る．
+            parts.append("\n\n")
+        parts.append(rendered[i])
+    return "".join(parts) + "\n"
+
+
 def transform_body_images(
     body: str,
     *,
@@ -903,6 +1030,11 @@ def publish_draft(
             file=sys.stderr,
         )
 
+    # 本文確定前処理: はてなブログの Markdown 表示に合わせ，段落結合・段落間の
+    # 余白・カード型リンクの埋め込み化を行う．画像処理より先に適用し，画像記法は
+    # そのまま残して後段へ委ねる．
+    body = transform_hatena_body(body)
+
     # 本文確定前処理: 本文中の Markdown 画像をフォトライフへ上げ figure へ置換する．
     # 送信が確定したドラフトに対してのみ実行し，抑止・スキップ時の無駄な通信を避ける．
     # バッチ処理でどのドラフトが原因か特定できるよう，失敗はパス付きで再送出する．
@@ -1013,6 +1145,26 @@ def fetch_categories(
     with urllib.request.urlopen(req, timeout=30) as resp:
         xml_bytes = resp.read()
     return parse_category_document(xml_bytes)
+
+
+def preview_drafts(draft_paths: list[Path]) -> None:
+    """送信せず，はてな整形後の本文を標準出力へ出す（更新前の確認用）．
+
+    `transform_hatena_body` のみ適用し，画像のアップロード（ネットワーク）は
+    行わない．画像記法は Markdown のまま残るため，段落結合・段落間の余白・
+    カード型リンクの埋め込み化の結果を確認する用途に使う．
+
+    本文には cp932 で表現できない文字（em ダッシュ等）が含まれうる．Windows の
+    コンソールへ `print` するとコーデックで落ちるため，標準出力へ UTF-8 の
+    バイト列を直接書き出してコンソールの符号化に依存しないようにする．
+    """
+    parts: list[str] = []
+    for path in draft_paths:
+        text = path.read_text(encoding="utf-8")
+        _, body = parse_frontmatter(text, source=str(path))
+        parts.append(f"===== {path} =====\n{transform_hatena_body(body)}")
+    sys.stdout.buffer.write("\n".join(parts).encode("utf-8"))
+    sys.stdout.buffer.flush()
 
 
 def list_categories(
@@ -1171,6 +1323,11 @@ def main() -> None:
         help="送信せず，はてな側の既存カテゴリー term 一覧を 1 行 1 件で標準出力へ出す",
     )
     parser.add_argument(
+        "--preview",
+        action="store_true",
+        help="送信せず，はてな整形後の本文を標準出力へ出す（画像処理は行わない）",
+    )
+    parser.add_argument(
         "--upload-map",
         type=Path,
         default=None,
@@ -1185,6 +1342,7 @@ def main() -> None:
             ("--sync", args.sync),
             ("--verify", args.verify),
             ("--list-categories", args.list_categories),
+            ("--preview", args.preview),
         )
         if on
     ]
@@ -1221,6 +1379,11 @@ def main() -> None:
             for p in missing:
                 print(f"Error: ファイルが見つかりません: {p}", file=sys.stderr)
             sys.exit(1)
+
+    # プレビューは送信も画像アップロードも行わないため，認証情報を要しない．
+    if args.preview:
+        preview_drafts(args.draft_file)
+        return
 
     username, blog_id, api_key = _load_credentials(args.env_file)
 
