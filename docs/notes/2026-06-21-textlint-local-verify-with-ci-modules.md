@@ -48,8 +48,8 @@ CI と同一バージョンの `node_modules` を使う．composite action は�
 | `textlint-rule-prh` | 6.1.0 |
 | `textlint-filter-rule-comments` | 1.3.0 |
 
-手順は次のとおり．`prh` の `rulePaths` は中央 `templates/prh.yml` の絶対パスへ
-書き換えた設定を別途用意し，`--config` で渡す．
+手順は次のとおり．まず `prh` の `rulePaths` を中央 `templates/prh.yml` の絶対パスへ
+書き換えた設定を別途用意する．その設定を `--config` で渡して実行する．
 
 ```bash
 ACTION_DIR="<github-workflows>/.github/actions/markdown-lint"
