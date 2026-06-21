@@ -150,7 +150,7 @@ Skill はオーケストレーション役，Subagent は個別タスクの実�
 本システムはタグを目的別に 3 層へ分ける．各層は生成の主体と用途が異なり，相互に二重管理しない．
 
 - 素材レベル：`auto_tags`．補正済み素材ごとに `note-tagger` が推定し，`.summary.yml` サイドカーへ書き出す．記事案づくりの手掛かりとして使う．
-- 記事レベル：`themes`．記事案（ `proposals/` ）の力点を示す．`article-proposer` が outline へ永続化し，`article-drafter` が本文化の steering として読む．
+- 記事レベル：`themes`．記事案（`proposals/`）の力点を示す．`article-proposer` が outline へ永続化し，`article-drafter` が本文化の steering として読む．
 - 公開分類：`categories`．はてなブログのカテゴリーに対応し，`publish.py` が投稿時に送る．既存カテゴリーを優先して選ぶ．
 
 記事レベルタグの正体は `themes` である．新フィールドは足さず既存の `themes` を再利用し，二重管理を避ける．どの値を採るかの判断は個人化版が担い，汎用側は層の規約のみを定める．

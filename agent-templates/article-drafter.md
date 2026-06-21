@@ -14,7 +14,7 @@ model: sonnet
 
 - 入力
   - 章立て：`drafts/<YYYY-MM-DD>-<slug>-outline.md`（`article-proposer` 出力）
-    - フロントマターの `themes`：記事レベルタグ．本文化の steering 入力として読む（「記事レベルタグ（ `themes` ）の力点反映」を参照）
+    - フロントマターの `themes`：記事レベルタグ．本文化の steering 入力として読む（「記事レベルタグ（`themes`）の力点反映」を参照）
   - 補正済み素材：`materials/corrected/<YYYY-MM-DD>-<note_title>.md`（1 件以上）
   - `style-profile.md`：執筆者の文体プロファイル（パスは Private 側 `CLAUDE.md` で指定）
 - 出力：`drafts/<YYYY-MM-DD>-<slug>.md`
@@ -45,7 +45,7 @@ status: draft
 ### やること
 
 - 章立ての `h2` 見出しを保持したまま，各章の要旨を本文へ展開する
-- outline の `themes` を本文の力点として読み，関連の深い論点へ字数と具体を寄せる（「記事レベルタグ（ `themes` ）の力点反映」を参照）
+- outline の `themes` を本文の力点として読み，関連の深い論点へ字数と具体を寄せる（「記事レベルタグ（`themes`）の力点反映」を参照）
 - 素材の「🗣️ 生の文字起こし」と「🤖 Evernote AI 構造化情報」から該当する記述を引用・再構成する
 - `style-profile.md` の文末バリエーション・接続詞・段落の締め方を参照し，文体を執筆者に近づける
 - 1 段落は 4 行程度に収める
@@ -60,7 +60,7 @@ status: draft
 - 章立てにない新たな章や節を追加しない
 - 人名をそのまま記述しない．第三者の名前が必要な場合は **役割で言い換える**．例として「登壇者」「主催者」のような語へ変える
 
-## 記事レベルタグ（ `themes` ）の力点反映
+## 記事レベルタグ（`themes`）の力点反映
 
 outline フロントマターの `themes` は，どの論点を厚く書くかを示す力点の指示である．本文化の steering 入力として読む．
 
