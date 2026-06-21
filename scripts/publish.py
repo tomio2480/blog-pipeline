@@ -793,10 +793,12 @@ def transform_body_images(
         # 絶対パスと親ディレクトリ参照は base_dir の外を指しうるため明確なエラーで弾く．
         # POSIX 区切りと Windows 区切りの双方で解釈し，実行 OS に依存せず判定する
         # （Windows の `Path("/x").is_absolute()` は False になるため）．
+        # `win.drive` も弾く．`C:assets/x.png` のドライブ相対パスは is_absolute が
+        # False だが，`base_dir / それ` で base_dir が無視され任意のドライブを指しうる．
         posix, win = PurePosixPath(decoded), PureWindowsPath(decoded)
-        if posix.is_absolute() or win.is_absolute():
+        if posix.is_absolute() or win.is_absolute() or win.drive:
             raise ValueError(
-                f"画像は相対パスで指定してください（絶対パスは不可）: {target}"
+                f"画像は相対パスで指定してください（絶対パス・ドライブ指定は不可）: {target}"
             )
         if ".." in posix.parts or ".." in win.parts:
             raise ValueError(
@@ -912,6 +914,13 @@ def publish_draft(
                 image_path, username, api_key, map_path=upload_map_path
             ),
         )
+    except urllib.error.HTTPError as exc:
+        # フォトライフの応答ボディには失敗理由（認証・容量など）が入るため拾う．
+        body_text = exc.read().decode("utf-8", errors="replace")
+        raise ValueError(
+            f"{draft_path}: 画像のアップロードに失敗しました"
+            f"（HTTP {exc.code}）: {body_text}"
+        ) from exc
     except (ValueError, OSError) as exc:
         raise ValueError(f"{draft_path}: 画像の処理に失敗しました: {exc}") from exc
 

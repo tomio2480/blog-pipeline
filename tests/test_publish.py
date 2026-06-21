@@ -1466,6 +1466,17 @@ def test_transform_body_images_rejects_absolute_path(tmp_path: Path) -> None:
         )
 
 
+def test_transform_body_images_rejects_drive_relative_path(tmp_path: Path) -> None:
+    """Windows のドライブ相対パス（C:assets/...）も弾く．"""
+    def boom(path: Path) -> str:
+        raise AssertionError("ドライブ相対パスはアップロードしてはならない")
+
+    with pytest.raises(ValueError):
+        transform_body_images(
+            "![代替](C:assets/a.png)\n", base_dir=tmp_path, upload_fn=boom
+        )
+
+
 def test_transform_body_images_rejects_parent_traversal(tmp_path: Path) -> None:
     def boom(path: Path) -> str:
         raise AssertionError("親ディレクトリ参照はアップロードしてはならない")
@@ -1533,3 +1544,28 @@ def test_publish_draft_image_error_includes_draft_path(
     with pytest.raises(ValueError) as excinfo:
         publish.publish_draft(draft, "u", "b", "k")
     assert str(draft) in str(excinfo.value)
+
+
+def test_publish_draft_image_upload_http_error_includes_body(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """画像アップロードの HTTPError は応答ボディと HTTP コードを含めて再送出される．"""
+    img = tmp_path / "a.png"
+    img.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+    draft = tmp_path / "2026-06-21-img.md"
+    draft.write_text(
+        '---\ndraft_of: "画像記事"\n---\n![代替](a.png)\n', encoding="utf-8"
+    )
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        raise urllib.error.HTTPError(
+            url, 401, "Unauthorized", {}, io.BytesIO(b"<error>auth failed</error>")
+        )
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    with pytest.raises(ValueError) as excinfo:
+        publish.publish_draft(draft, "u", "b", "k")
+    msg = str(excinfo.value)
+    assert str(draft) in msg
+    assert "401" in msg
+    assert "auth failed" in msg
