@@ -595,7 +595,7 @@ def verify_entries(
     すべて健全なら `True` を返す．呼び出し元はこの戻り値で終了コードを決められる．
     `hatena_entry_id` 未設定は未送信・未回収の通常状態とみなし，失敗に数えない．
     """
-    ok = True
+    ok: bool = True
     for path in draft_paths:
         fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"), source=str(path))
         entry_id = fm.get("hatena_entry_id")
@@ -701,7 +701,7 @@ def main() -> None:
         # 重複抑止のため一覧を 1 度だけ取得して正規化タイトル索引を作る．
         existing_index: dict[str, list[str]] | None = None
         if not args.force_new:
-            needs_index = False
+            needs_index: bool = False
             for path in args.draft_file:
                 fm, _ = parse_frontmatter(
                     path.read_text(encoding="utf-8"), source=str(path)
