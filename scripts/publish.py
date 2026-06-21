@@ -618,7 +618,12 @@ def load_upload_map(path: Path) -> dict[str, str]:
     raw = path.read_text(encoding="utf-8")
     if not raw.strip():
         return {}
-    data = json.loads(raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"アップロード記録の JSON 解析に失敗しました: {path}"
+        ) from exc
     if not isinstance(data, dict):
         raise ValueError(
             f"アップロード記録の形式が不正です（最上位は辞書である必要があります）: {path}"
@@ -631,7 +636,11 @@ def load_upload_map(path: Path) -> dict[str, str]:
 
 
 def save_upload_map(path: Path, mapping: dict[str, str]) -> None:
-    """アップロード記録を JSON で書き出す（キー順に整列し差分を安定させる）．"""
+    """アップロード記録を JSON で書き出す（キー順に整列し差分を安定させる）．
+
+    親ディレクトリが無い場合は作成してから書き込む（`FileNotFoundError` を防ぐ）．
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
     text = json.dumps(mapping, ensure_ascii=False, indent=2, sort_keys=True)
     path.write_text(text + "\n", encoding="utf-8")
 

@@ -1134,6 +1134,22 @@ def test_save_then_load_upload_map_roundtrip(tmp_path: Path) -> None:
     assert load_upload_map(p) == {"abc": "f:id:u:1:image"}
 
 
+def test_save_upload_map_creates_parent_dirs(tmp_path: Path) -> None:
+    """親ディレクトリが無くても作成して書き込む（FileNotFoundError を防ぐ）．"""
+    p = tmp_path / "nested" / "dir" / "uploads.json"
+    save_upload_map(p, {"abc": "f:id:u:1:image"})
+    assert load_upload_map(p) == {"abc": "f:id:u:1:image"}
+
+
+def test_load_upload_map_wraps_corrupt_json_with_path(tmp_path: Path) -> None:
+    """壊れた JSON は ValueError とし，メッセージにパスを含める（識別容易化）．"""
+    p = tmp_path / "uploads.json"
+    p.write_text("{not valid json", encoding="utf-8")
+    with pytest.raises(ValueError) as exc:
+        load_upload_map(p)
+    assert str(p) in str(exc.value)
+
+
 def test_load_upload_map_empty_file_returns_empty(tmp_path: Path) -> None:
     p = tmp_path / "uploads.json"
     p.write_text("", encoding="utf-8")
