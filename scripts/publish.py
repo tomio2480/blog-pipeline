@@ -816,22 +816,22 @@ def _split_body_blocks(body: str) -> list[str]:
 
 
 def _classify_block(block: str) -> str:
-    """ブロックの種別（prose / link / image / verbatim）を返す．
+    """ブロックの種別（prose / link / image / heading / list / verbatim）を返す．
 
-    prose は段落結合，link は埋め込み化の対象とする．image は後段の画像処理へ
-    委ねるため種別を分ける．見出し・箇条書き・コードフェンス・引用・HTML・表は
-    verbatim としてそのまま残す．
+    種別は本文整形と境界の余白判定に使う．prose は段落結合，link は埋め込み化の
+    対象とする．heading・list は余白判定で他と区別するため種別を分ける．image は
+    後段の画像処理へ委ねる．コードフェンス・引用・HTML・表は verbatim として残す．
     """
     first = block.split("\n", 1)[0].lstrip()
     if first.startswith("```") or first.startswith("~~~"):
         return "verbatim"
-    if first.startswith("#") or first.startswith(">") or first.startswith("|"):
-        return "verbatim"
+    if first.startswith("#"):
+        return "heading"
     if first.startswith("!"):
         return "image"
-    if first.startswith("<"):
-        return "verbatim"
     if _LIST_MARKER_PATTERN.match(first):
+        return "list"
+    if first.startswith(">") or first.startswith("|") or first.startswith("<"):
         return "verbatim"
     if "\n" not in block:
         text = block.strip()
@@ -855,13 +855,31 @@ def _render_block(kind: str, block: str) -> str:
     return block
 
 
+def _needs_spacer(prev: str, nxt: str) -> bool:
+    """ブロック境界へ区切り行（`_PARAGRAPH_SPACER`）を挟むかどうかを判定する．
+
+    段落どうし・段落から見出しへの境界，および箇条書き・リスト・埋め込み
+    （カード型リンク）・画像の前後へ余白を入れる．見出しから本文への境界
+    （タイトルと直後の本文）など，余白が不要な箇所では挟まない．
+    """
+    if prev == "prose" and nxt in {"prose", "heading"}:
+        return True
+    media = {"list", "link", "image"}
+    return prev in media or nxt in media
+
+
 def transform_hatena_body(body: str) -> str:
     """本文をはてなブログの Markdown 表示に合わせて整形する（本文確定前処理）．
 
     はてなブログの Markdown では段落内の単純な改行が不要な半角スペースになる．
     そこで段落（連続する非空行）内の改行を取り除いて 1 行へ結合し，末尾へ
-    半角スペース 2 つを付けて明示的な改行とする．連続する段落の間には区切り行
-    `_PARAGRAPH_SPACER` を挟み，余白を確保する．
+    半角スペース 2 つを付けて明示的な改行とする．
+
+    ブロックの境界には区切り行 `_PARAGRAPH_SPACER` を挟んで余白を確保する．
+    段落どうしは空行を挟まず区切り行のみで連結し，1 つの段落塊として扱う．
+    段落から見出しへの境界，および箇条書き・リスト・埋め込み・画像の前後では，
+    Markdown の解釈を保つため区切り行を前後の空行で囲む．見出しから本文への
+    境界など余白が不要な箇所では，区切り行を挟まず空行のみで区切る．
 
     単独行のリンク（Markdown リンクまたは裸 URL）はカード型とみなし，はてなの
     埋め込み記法 `[URL:embed:cite]` へ変換する．文中のインラインリンクは対象外．
@@ -877,11 +895,16 @@ def transform_hatena_body(body: str) -> str:
 
     parts = [rendered[0]]
     for i in range(1, len(rendered)):
-        if kinds[i - 1] == "prose" and kinds[i] == "prose":
+        prev, nxt = kinds[i - 1], kinds[i]
+        if prev == "prose" and nxt == "prose":
             # 段落どうしは空行を挟まず，区切り行で連結して 1 つの段落塊に保つ．
             parts.append(f"\n{_PARAGRAPH_SPACER}\n")
+        elif _needs_spacer(prev, nxt):
+            # 見出し・箇条書き・埋め込み等との境界は，区切り行を空行で囲み，
+            # それぞれが独立したブロックとして解釈されるようにする．
+            parts.append(f"\n\n{_PARAGRAPH_SPACER}\n\n")
         else:
-            # 段落以外（見出し・箇条書き・カード等）との境界は空行で区切る．
+            # 見出し→本文など，余白が不要な境界は空行のみで区切る．
             parts.append("\n\n")
         parts.append(rendered[i])
     return "".join(parts) + "\n"

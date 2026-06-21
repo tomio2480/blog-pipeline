@@ -1590,16 +1590,30 @@ def test_transform_hatena_body_inserts_spacer_between_paragraphs() -> None:
     )
 
 
-def test_transform_hatena_body_keeps_heading_on_own_line() -> None:
-    """見出しは結合せず，前後を空行で区切ってそのまま残す．"""
+def test_transform_hatena_body_heading_to_prose_no_spacer() -> None:
+    """見出し→本文の境界には区切り行を挟まず，空行のみで区切る．"""
     body = "## 見出し\n\n本文です．\n"
     assert transform_hatena_body(body) == "## 見出し\n\n本文です．  \n"
 
 
+def test_transform_hatena_body_spacer_before_heading() -> None:
+    """段落の次が見出しでも，前後を空行で囲んだ区切り行を挟む．"""
+    body = "本文です．\n\n## 見出し\n"
+    assert transform_hatena_body(body) == "本文です．  \n\n　  \n\n## 見出し\n"
+
+
 def test_transform_hatena_body_passes_through_ordered_list() -> None:
-    """番号付き箇条書きは結合・カード化せずそのまま残す．"""
+    """番号付き箇条書きは結合・カード化せずそのまま残す（単独ブロック）．"""
     body = "1. 一\n2. 二\n"
     assert transform_hatena_body(body) == "1. 一\n2. 二\n"
+
+
+def test_transform_hatena_body_spacer_around_list() -> None:
+    """箇条書きの前後へ，空行で囲んだ区切り行を挟む．"""
+    body = "導入文．\n\n1. 一\n2. 二\n\n後文．\n"
+    assert transform_hatena_body(body) == (
+        "導入文．  \n\n　  \n\n1. 一\n2. 二\n\n　  \n\n後文．  \n"
+    )
 
 
 def test_transform_hatena_body_embeds_standalone_markdown_link() -> None:
@@ -1638,10 +1652,11 @@ def test_transform_hatena_body_passes_through_image_markdown() -> None:
 
 
 def test_transform_hatena_body_prose_link_prose_structure() -> None:
-    """段落・単独リンク・段落の並びで，リンク前後は空行で区切る．"""
+    """段落・単独リンク・段落の並びで，埋め込みの前後へ区切り行を挟む．"""
     body = "前段の文．\n\n[a](https://e/x)\n\n後段の文．\n"
     assert transform_hatena_body(body) == (
-        "前段の文．  \n\n[https://e/x:embed:cite]\n\n後段の文．  \n"
+        "前段の文．  \n\n　  \n\n[https://e/x:embed:cite]"
+        "\n\n　  \n\n後段の文．  \n"
     )
 
 
