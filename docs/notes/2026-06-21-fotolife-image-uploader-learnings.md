@@ -20,7 +20,7 @@ AtomPub API へ画像をアップロードし，応答の f:id 記法を本文�
 ## 着手前の重複検出
 
 別の起票 Issue #47（`hatena_entry_id` のクォート書き戻し）は，着手前の確認で
-実装済みと判明した．`upsert_frontmatter_field` は既に `quote` 引数を持ち，
+実装済みと判明した．`upsert_frontmatter_field` は既に `quote` 引数を持つ．
 新規 POST 経路と `--sync` 経路の双方が `quote=True` を渡していた．
 
 判断として `git log -S "<導入した識別子>"` で導入コミットを特定し，起票
