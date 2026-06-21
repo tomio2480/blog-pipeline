@@ -261,15 +261,19 @@ def normalize_categories(raw: str | list[str] | None) -> list[str]:
 
     - `None` は空リストにする．
     - 文字列スカラーは 1 要素のリストへ寄せる（誤って文字単位に割れない）．
+    - リスト・タプルの要素は `str()` 化する．それ以外のスカラーも 1 要素へ寄せて
+      `str()` 化する（将来 YAML パーサーへ移行し数値スカラーが来ても落ちない防御）．
     - 各要素は前後空白を外し，空要素は捨てる．
     - 順序を保ったまま重複を除く．
     """
     if raw is None:
-        items = []
+        items: list[str] = []
     elif isinstance(raw, str):
         items = [raw]
+    elif isinstance(raw, (list, tuple)):
+        items = [str(x) for x in raw]
     else:
-        items = list(raw)
+        items = [str(raw)]
 
     result: list[str] = []
     seen: set[str] = set()

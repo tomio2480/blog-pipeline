@@ -822,6 +822,16 @@ def test_normalize_categories_empty_string() -> None:
     assert normalize_categories("") == []
 
 
+def test_normalize_categories_coerces_non_string_elements() -> None:
+    """非文字列の要素（数値など）も str 化して受ける（将来の YAML 移行対策）．"""
+    assert normalize_categories([2026, "PHP"]) == ["2026", "PHP"]
+
+
+def test_normalize_categories_non_string_scalar() -> None:
+    """非文字列スカラーも 1 要素へ寄せて str 化する（list(int) の TypeError を防ぐ）．"""
+    assert normalize_categories(2026) == ["2026"]
+
+
 # ---------- build_atom_entry（categories） ----------
 
 
