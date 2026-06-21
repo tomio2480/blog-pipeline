@@ -253,6 +253,23 @@ python scripts/publish.py drafts/*.md --verify
 python scripts/publish.py --list-categories
 ```
 
+#### 本文への画像設置
+
+送信前に本文の標準 Markdown 画像記法 `![alt](path "caption")` を処理する．ローカル相対パスの画像はフォトライフへ上げて f:id 記法へ置換する．外部 URL（`https://...`）の画像は上げずに `<img>` でそのまま参照する．いずれも `<figure>` / `<figcaption>` で包む．`alt` は必須とし，欠落はエラーとする．
+
+オーサリング規約は次のとおり．
+
+- 本文に `![alt](相対パス "caption")` を書く．`caption` は省略可とし，省略時は `<figcaption>` を付けない．
+- 画像ファイルはリポジトリ内（例：`assets/`）へ置き，本文からは相対パスで参照する．相対パスはドラフトファイルの位置を起点に解決する．
+- 既に Web 上にある画像は外部 URL でそのまま参照し，アップロード対象外とする．
+- f:id 記法の `alt` はコロン（`:`）と閉じ括弧（`]`）を区切りに使うため，これらを `alt` に含めるとエラーとする．
+
+`--upload-map` に JSON パスを渡すと，画像内容のハッシュをキーに記録し，同一画像の再アップロードを抑止する（既定では記録しない）．
+
+```bash
+python scripts/publish.py drafts/2026-05-07-my-article.md --upload-map .upload_map.json
+```
+
 ### テスト
 
 ```bash
