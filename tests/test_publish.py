@@ -1121,6 +1121,20 @@ def test_extract_fotolife_syntax_empty_when_absent() -> None:
     assert extract_fotolife_syntax(b"<entry></entry>") == ""
 
 
+def test_extract_fotolife_syntax_handles_other_prefix() -> None:
+    """名前空間接頭辞が変わっても要素のローカル名で取り出せる．"""
+    resp = (
+        b'<entry xmlns:h="http://www.hatena.ne.jp/info/xmlns#">'
+        b"<h:syntax>f:id:u:1:image</h:syntax></entry>"
+    )
+    assert extract_fotolife_syntax(resp) == "f:id:u:1:image"
+
+
+def test_extract_fotolife_syntax_empty_on_malformed_xml() -> None:
+    """整形式でない XML は空文字を返す（呼び出し側がアップロード失敗を判定する）．"""
+    assert extract_fotolife_syntax(b"<entry><hatena:syntax>broken") == ""
+
+
 # ---------- load_upload_map / save_upload_map ----------
 
 

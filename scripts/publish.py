@@ -598,12 +598,21 @@ def extract_fotolife_syntax(response_body: bytes) -> str:
     """フォトライフの投稿レスポンスから `hatena:syntax` の f:id 記法を取り出す．
 
     レスポンスは `<hatena:syntax>f:id:USER:XXXX:image</hatena:syntax>` を含む．
-    名前空間宣言の有無に依らず取り出せるよう，要素名で正規表現照合する．
-    見つからなければ空文字を返す（呼び出し側でアップロード失敗を判定する）．
+    名前空間接頭辞の変更や属性・改行に影響されないよう，`{*}syntax` の
+    ワイルドカード名前空間でローカル名照合する．見つからない・整形式でない場合は
+    空文字を返す（呼び出し側でアップロード失敗を判定する）．
+
+    入力は認証済みはてな AtomPub API（HTTPS）のレスポンスに限るため信頼境界の
+    内側として扱う．stdlib の expat は外部エンティティ・DTD を解決しないため
+    XXE は対象外である（`parse_collection_feed` と同方針）．
     """
-    match = re.search(rb"<hatena:syntax>([^<]+)</hatena:syntax>", response_body)
-    if match:
-        return match.group(1).decode("utf-8").strip()
+    try:
+        root = ET.fromstring(response_body)
+    except ET.ParseError:
+        return ""
+    syntax_text = root.findtext(".//{*}syntax")
+    if syntax_text:
+        return syntax_text.strip()
     return ""
 
 
