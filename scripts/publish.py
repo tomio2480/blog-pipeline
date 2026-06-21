@@ -5,10 +5,15 @@
 - 標準ライブラリのみで実装する．サードパーティ依存ゼロ．
 - `<app:draft>yes</app:draft>` をハードコードし，公開フラグは持たせない．
   公開判断ははてなブログの管理画面で人間が行う．
-- 送信メソッドは frontmatter で自動判定する．
-  `hatena_entry_id` なし → 新規 POST（成功時に entry ID を frontmatter へ書き戻す）．
-  `hatena_entry_id` あり → 既存下書きの更新 PUT．
+- 送信メソッドは frontmatter の `hatena_entry_id` を主キーとして自動判定する．
+  `hatena_entry_id` あり → 既存下書きの更新 PUT（常に ID 指定）．
+  `hatena_entry_id` なし → 新規 POST（成功時に entry ID をクォート付きで書き戻す）．
   `hatena_published: true` → 公開後ははてな側を真とするため自動送信を拒否する．
+  タイトル一致は ID 未設定時の補助に留め，主たる照合には使わない．
+- 新規 POST の前に，正規化タイトル（空白無視）一致の既存下書きがあれば抑止する．
+  意図的に新規作成する場合は `--force-new` を付ける．
+- 存在確認はメンバー `GET`（`/atom/entry/{id}` の 200／404）を正本とする．
+  コレクションフィードは結果整合で取りこぼすため，破壊的判断の根拠にしない．
 - 環境変数（HATENA_USERNAME / HATENA_BLOG_ID / HATENA_API_KEY）は
   `--env-file`（既定: `.env`）から読み込む．
   環境変数に既に設定済みの場合はそちらを優先する（os.environ 優先）．
@@ -18,7 +23,9 @@
 
     python scripts/publish.py drafts/2026-05-07-my-article.md
     python scripts/publish.py drafts/2026-05-07-my-article.md --env-file /path/to/.env
-    python scripts/publish.py drafts/*.md --sync   # ID 回収のみ（送信しない）
+    python scripts/publish.py drafts/*.md --sync     # ID 回収のみ（送信しない）
+    python scripts/publish.py drafts/*.md --verify   # ID の実在をメンバー GET で検証
+    python scripts/publish.py drafts/new.md --force-new  # 重複抑止を無視して新規 POST
 
 出力:
 
@@ -264,10 +271,71 @@ def parse_feed_next_link(xml_bytes: bytes) -> str | None:
     return None
 
 
-def upsert_frontmatter_field(text: str, key: str, value: str) -> str:
-    """フロントマターへ `key: value` を追記または置換する（本文は保つ）．"""
+def normalize_title(title: str) -> str:
+    """タイトルを正規化する（空白類をすべて除去）．
+
+    全角・半角の空白やタブの有無だけが異なるタイトルを同一視するために使う．
+    文字そのものの違い（例：「学会誌」→「会誌」）は吸収しない．
+    """
+    return re.sub(r"\s+", "", title or "")
+
+
+def build_title_index(entries: list[dict]) -> dict[str, list[str]]:
+    """エントリ一覧から「正規化タイトル → entry_id のリスト」の索引を作る．
+
+    同一の正規化タイトルが複数あれば，出現順で entry_id を集約する．
+    """
+    index: dict[str, list[str]] = {}
+    for entry in entries:
+        key = normalize_title(entry.get("title", ""))
+        if not key:
+            # 空タイトルは照合キーにしない（空文字列キーへの誤集約・誤一致を防ぐ）．
+            continue
+        entry_id = entry.get("entry_id") or ""
+        if not entry_id:
+            # entry_id が空のエントリは照合・書き戻しの対象にしない．
+            continue
+        index.setdefault(key, []).append(entry_id)
+    return index
+
+
+def find_title_matches(title: str, index: dict[str, list[str]]) -> list[str]:
+    """正規化タイトルが一致する既存エントリの entry_id 一覧を返す（なければ空）．
+
+    正規化後が空のタイトルは照合対象にせず，常に空リストを返す．
+    """
+    key = normalize_title(title)
+    if not key:
+        return []
+    return index.get(key, [])
+
+
+def should_suppress_new_post(
+    title: str,
+    index: dict[str, list[str]],
+    *,
+    force_new: bool,
+) -> bool:
+    """新規 POST を抑止すべきか判定する．
+
+    正規化タイトル一致の既存エントリがあり，かつ `force_new` でないとき True．
+    """
+    if force_new:
+        return False
+    return bool(find_title_matches(title, index))
+
+
+def upsert_frontmatter_field(
+    text: str, key: str, value: str, *, quote: bool = False
+) -> str:
+    """フロントマターへ `key: value` を追記または置換する（本文は保つ）．
+
+    `quote=True` のとき値をダブルクォートで囲む．`hatena_entry_id` のような
+    19 桁の数値を YAML が浮動小数として精度を落とすのを防ぐ用途で使う．
+    """
     lines = text.splitlines(keepends=True)
-    new_line = f"{key}: {value}\n"
+    rendered = f'"{value}"' if quote else value
+    new_line = f"{key}: {rendered}\n"
     if not lines or lines[0].rstrip() != FRONTMATTER_DELIMITER:
         return f"---\n{new_line}---\n\n{text}"
 
@@ -312,13 +380,55 @@ def _send_entry(
         return resp.read()
 
 
+def entry_exists(
+    username: str,
+    blog_id: str,
+    api_key: str,
+    entry_id: str,
+) -> bool:
+    """メンバー URI を `GET` し，エントリの実在を確認する（存在確認の正本）．
+
+    HTTP 200 → True，404 → False．それ以外の `HTTPError` は再送出する．
+    コレクションフィードは結果整合で取りこぼしがあるため，削除・再投稿などの
+    破壊的判断はこのメンバー `GET` を根拠にする．
+
+    `entry_id` が空・空白のみの場合はメンバー URI が作れず，コレクション URI への
+    `GET`（フィード）に化けて 200 を誤って返すため，先に False を返す．
+    はてなのエントリ ID は ASCII 数字のみで構成される．全角数字や記号混じりは
+    不正な URL 組み立てを招きうるため，送信前に拒否する（不要な通信も避ける）．
+    """
+    if not entry_id or not (entry_id.isascii() and entry_id.isdigit()):
+        return False
+    url = build_member_url(username, blog_id, entry_id)
+    req = urllib.request.Request(
+        url,
+        headers={"X-WSSE": build_wsse_header(username, api_key)},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30):
+            return True
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return False
+        raise
+
+
 def publish_draft(
     draft_path: Path,
     username: str,
     blog_id: str,
     api_key: str,
+    *,
+    existing_index: dict[str, list[str]] | None = None,
+    force_new: bool = False,
 ) -> None:
-    """ドラフトを読み込み，frontmatter に応じて新規 POST か更新 PUT で送る．"""
+    """ドラフトを読み込み，frontmatter に応じて新規 POST か更新 PUT で送る．
+
+    `existing_index` に正規化タイトル索引を渡すと，新規 POST 前に重複候補を照合し
+    抑止する．`None` のとき（既定）は抑止せず従来どおり送信する．`force_new=True`
+    は索引があっても抑止しない．
+    """
     text = draft_path.read_text(encoding="utf-8")
     fm, body = parse_frontmatter(text, source=str(draft_path))
 
@@ -330,6 +440,24 @@ def publish_draft(
         method, entry_id = decide_publish_method(fm)
     except ValueError as exc:
         print(f"Skip: {draft_path}: {exc}", file=sys.stderr)
+        return
+
+    # 新規 POST の前に，正規化タイトル一致の既存下書きがあれば抑止する．
+    # フィードは結果整合のため取りこぼしがありうるが，ここは破壊的でない
+    # 警告・抑止であり，誤検知（取りこぼしによる未警告）でも従来動作に戻るだけ．
+    if (
+        method == "POST"
+        and existing_index is not None
+        and should_suppress_new_post(title, existing_index, force_new=force_new)
+    ):
+        matches = find_title_matches(title, existing_index)
+        print(
+            f"Skip（重複の恐れ）: {draft_path}: "
+            f"同名（空白無視）の既存エントリがあります: {', '.join(matches)}．"
+            "更新する場合は frontmatter に hatena_entry_id を設定するか "
+            "`--sync` で回収してください．意図的な新規作成は `--force-new` を付けます．",
+            file=sys.stderr,
+        )
         return
 
     entry_xml = build_atom_entry(title, body)
@@ -354,8 +482,16 @@ def publish_draft(
     if method == "POST":
         new_id = extract_entry_id(response_body)
         if new_id:
-            updated = upsert_frontmatter_field(text, "hatena_entry_id", new_id)
+            updated = upsert_frontmatter_field(
+                text, "hatena_entry_id", new_id, quote=True
+            )
             draft_path.write_text(updated, encoding="utf-8")
+            # 同一バッチ内に同名の新規ドラフトが続く場合の重複 POST を防ぐため，
+            # 送信した ID を索引へ反映し，後続の照合で抑止できるようにする．
+            if existing_index is not None:
+                key = normalize_title(title)
+                if key:
+                    existing_index.setdefault(key, []).append(new_id)
         entry_id = new_id
 
     if entry_id:
@@ -400,7 +536,10 @@ def sync_entry_ids(
     blog_id: str,
     api_key: str,
 ) -> None:
-    """はてな側の一覧と突合し，title 一致で hatena_entry_id を frontmatter へ書く．"""
+    """はてな側の一覧と突合し，正規化タイトル一致で hatena_entry_id を frontmatter へ書く．
+
+    同名（空白無視）が複数あるときは取り違えを避けて自動記録しない（警告のみ）．
+    """
     try:
         entries = fetch_all_entries(username, blog_id, api_key)
     except urllib.error.HTTPError as exc:
@@ -411,14 +550,7 @@ def sync_entry_ids(
         print(f"Error: {exc.reason}", file=sys.stderr)
         sys.exit(1)
 
-    by_title: dict[str, str] = {}
-    for entry in entries:
-        # 同名が複数あれば最初の 1 件を採用する（重複は警告）．
-        title = entry["title"]
-        if title in by_title and by_title[title] != entry["entry_id"]:
-            print(f"Warning: 同名タイトルが複数あります: {title}", file=sys.stderr)
-            continue
-        by_title.setdefault(title, entry["entry_id"])
+    index = build_title_index(entries)
 
     for path in draft_paths:
         text = path.read_text(encoding="utf-8")
@@ -427,13 +559,72 @@ def sync_entry_ids(
             print(f"Skip（ID 設定済み）: {path}")
             continue
         title = fm.get("draft_of") or path.stem
-        entry_id = by_title.get(title)
-        if not entry_id:
+        matches = find_title_matches(title, index)
+        if not matches:
             print(f"未一致（はてな側に該当なし）: {path}", file=sys.stderr)
             continue
-        updated = upsert_frontmatter_field(text, "hatena_entry_id", entry_id)
+        if len(matches) > 1:
+            # 同名（空白無視）が複数のときは取り違えを避け，自動記録しない．
+            print(
+                f"Warning: 同名（空白無視）が複数あり一意に定まりません: "
+                f"{path}: {', '.join(matches)}",
+                file=sys.stderr,
+            )
+            continue
+        entry_id = matches[0]
+        updated = upsert_frontmatter_field(
+            text, "hatena_entry_id", entry_id, quote=True
+        )
         path.write_text(updated, encoding="utf-8")
         print(f"ID 記録: {path} -> {entry_id}")
+
+
+def verify_entries(
+    draft_paths: list[Path],
+    username: str,
+    blog_id: str,
+    api_key: str,
+) -> bool:
+    """各ドラフトの `hatena_entry_id` をメンバー `GET` し，実在を検証する．
+
+    コレクションフィードは結果整合で取りこぼすため，存在確認はメンバー `GET`
+    （200／404）を正本とする．送信や frontmatter の変更は行わない（読み取りのみ）．
+    診断目的のため，1 件のエラーで中断せず各ドラフトを最後まで検証する．
+
+    検証に失敗した項目（404 の欠落・HTTP／URL エラー）が 1 件でもあれば `False`，
+    すべて健全なら `True` を返す．呼び出し元はこの戻り値で終了コードを決められる．
+    `hatena_entry_id` 未設定は未送信・未回収の通常状態とみなし，失敗に数えない．
+    """
+    ok: bool = True
+    for path in draft_paths:
+        fm, _ = parse_frontmatter(path.read_text(encoding="utf-8"), source=str(path))
+        entry_id = fm.get("hatena_entry_id")
+        if not entry_id:
+            print(f"ID なし（未送信または未回収）: {path}")
+            continue
+        try:
+            exists = entry_exists(username, blog_id, api_key, entry_id)
+        except urllib.error.HTTPError as exc:
+            print(
+                f"Error: HTTP {exc.code} {exc.reason}: {path} (id={entry_id})",
+                file=sys.stderr,
+            )
+            ok = False
+            continue
+        except urllib.error.URLError as exc:
+            print(f"Error: {exc.reason}: {path} (id={entry_id})", file=sys.stderr)
+            ok = False
+            continue
+        if exists:
+            print(f"OK（実在）: {path} -> {entry_id}")
+        else:
+            print(
+                f"欠落（404・ID が無効）: {path} (id={entry_id})．"
+                "ID の付け間違いか，はてな側で削除された可能性があります．",
+                file=sys.stderr,
+            )
+            ok = False
+    return ok
 
 
 def _load_credentials(env_file: Path) -> tuple[str, str, str]:
@@ -463,9 +654,23 @@ def main() -> None:
     parser.add_argument(
         "--sync",
         action="store_true",
-        help="送信せず，はてな側の一覧と title 照合で hatena_entry_id を frontmatter へ記録する",
+        help="送信せず，はてな側の一覧と正規化タイトル照合で hatena_entry_id を frontmatter へ記録する",
+    )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="送信せず，各ドラフトの hatena_entry_id をメンバー GET（200／404）で検証する",
+    )
+    parser.add_argument(
+        "--force-new",
+        action="store_true",
+        help="正規化タイトル一致の既存下書きがあっても抑止せず，新規 POST を強行する",
     )
     args = parser.parse_args()
+
+    if args.sync and args.verify:
+        print("Error: --sync と --verify は同時に指定できません．", file=sys.stderr)
+        sys.exit(2)
 
     missing = [p for p in args.draft_file if not p.is_file()]
     if missing:
@@ -487,8 +692,44 @@ def main() -> None:
             sync_entry_ids(args.draft_file, username, blog_id, api_key)
             return
 
+        if args.verify:
+            if not verify_entries(args.draft_file, username, blog_id, api_key):
+                sys.exit(1)
+            return
+
+        # 新規 POST 予定（hatena_entry_id 未設定）のドラフトがある場合のみ，
+        # 重複抑止のため一覧を 1 度だけ取得して正規化タイトル索引を作る．
+        existing_index: dict[str, list[str]] | None = None
+        if not args.force_new:
+            needs_index: bool = False
+            for path in args.draft_file:
+                fm, _ = parse_frontmatter(
+                    path.read_text(encoding="utf-8"), source=str(path)
+                )
+                if not fm.get("hatena_entry_id"):
+                    needs_index = True
+                    break
+            if needs_index:
+                existing_index = build_title_index(
+                    fetch_all_entries(username, blog_id, api_key)
+                )
+
         for path in args.draft_file:
-            publish_draft(path, username, blog_id, api_key)
+            publish_draft(
+                path,
+                username,
+                blog_id,
+                api_key,
+                existing_index=existing_index,
+                force_new=args.force_new,
+            )
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="replace")
+        print(f"Error: HTTP {exc.code} {exc.reason}\n{body_text}", file=sys.stderr)
+        sys.exit(1)
+    except urllib.error.URLError as exc:
+        print(f"Error: {exc.reason}", file=sys.stderr)
+        sys.exit(1)
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)

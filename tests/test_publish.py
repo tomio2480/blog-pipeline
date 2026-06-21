@@ -1,27 +1,36 @@
 """publish.py の純粋関数ユニットテスト．
 
-ネットワーク接続が不要な関数のみ対象とする．
+純粋関数を主対象とする．`entry_exists` のみネットワークを伴うが，
+`urllib.request.urlopen` をモックして単体テストする．
 `publish_draft`・`sync_entry_ids`・`main` は統合テスト扱いとし，本ファイルでは扱わない．
 """
 
 from __future__ import annotations
 
-import sys
+import io
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 import pytest
 
+import publish
 from publish import (
     build_atom_entry,
     build_collection_url,
     build_member_url,
+    build_title_index,
     build_wsse_header,
     decide_publish_method,
+    entry_exists,
     extract_entry_id,
+    find_title_matches,
     get_env,
     load_env_file,
+    normalize_title,
     parse_collection_feed,
     parse_frontmatter,
+    should_suppress_new_post,
     upsert_frontmatter_field,
 )
 
@@ -329,3 +338,337 @@ def test_upsert_frontmatter_field_preserves_body() -> None:
     out = upsert_frontmatter_field(text, "k", "v")
     _, body = parse_frontmatter(out)
     assert body == "line1\nline2\n"
+
+
+def test_upsert_frontmatter_field_quote_inserts_quoted() -> None:
+    """quote=True で新規キーをダブルクォート付きで書き込む（YAML の精度落ち防止）．"""
+    text = "---\ndraft_of: t\n---\nbody\n"
+    out = upsert_frontmatter_field(text, "hatena_entry_id", "6801883189073", quote=True)
+    assert 'hatena_entry_id: "6801883189073"' in out
+    fm, _ = parse_frontmatter(out)
+    assert fm["hatena_entry_id"] == "6801883189073"
+
+
+def test_upsert_frontmatter_field_quote_replaces_unquoted() -> None:
+    """既存のクォートなしキーを置換しても，書き戻しはクォート付きになる．"""
+    text = "---\ndraft_of: t\nhatena_entry_id: 111\n---\nbody\n"
+    out = upsert_frontmatter_field(text, "hatena_entry_id", "222", quote=True)
+    assert 'hatena_entry_id: "222"' in out
+    assert out.count("hatena_entry_id") == 1
+
+
+def test_upsert_frontmatter_field_default_unquoted() -> None:
+    """quote 省略時は従来どおりクォートなしで書き込む（後方互換）．"""
+    text = "---\ndraft_of: t\n---\nbody\n"
+    out = upsert_frontmatter_field(text, "k", "v")
+    assert "k: v\n" in out
+
+
+# ---------- normalize_title ----------
+
+
+def test_normalize_title_removes_spaces() -> None:
+    assert normalize_title("IPSJ 会誌 編集") == "IPSJ会誌編集"
+
+
+def test_normalize_title_removes_fullwidth_space() -> None:
+    assert normalize_title("記事　A") == "記事A"
+
+
+def test_normalize_title_strips_edges_and_tabs() -> None:
+    assert normalize_title("  a\tb\n") == "ab"
+
+
+def test_normalize_title_empty() -> None:
+    assert normalize_title("") == ""
+
+
+# ---------- build_title_index / find_title_matches ----------
+
+
+def test_build_title_index_groups_by_normalized_title() -> None:
+    entries = [
+        {"entry_id": "1", "title": "記事 A", "draft": True},
+        {"entry_id": "2", "title": "記事A", "draft": True},
+        {"entry_id": "3", "title": "別の記事", "draft": True},
+    ]
+    index = build_title_index(entries)
+    assert index["記事A"] == ["1", "2"]
+    assert index["別の記事"] == ["3"]
+
+
+def test_find_title_matches_returns_candidate_ids() -> None:
+    index = {"記事A": ["1", "2"]}
+    assert find_title_matches("記事 A", index) == ["1", "2"]
+
+
+def test_find_title_matches_empty_when_absent() -> None:
+    assert find_title_matches("未知", {"記事A": ["1"]}) == []
+
+
+# ---------- should_suppress_new_post ----------
+
+
+def test_should_suppress_new_post_true_when_match_and_not_forced() -> None:
+    index = {"記事A": ["1"]}
+    assert should_suppress_new_post("記事 A", index, force_new=False) is True
+
+
+def test_should_suppress_new_post_false_when_forced() -> None:
+    index = {"記事A": ["1"]}
+    assert should_suppress_new_post("記事 A", index, force_new=True) is False
+
+
+def test_should_suppress_new_post_false_when_no_match() -> None:
+    assert should_suppress_new_post("新題", {"記事A": ["1"]}, force_new=False) is False
+
+
+# ---------- entry_exists（メンバー GET・ネットワークはモック） ----------
+
+
+class _FakeResp:
+    def __enter__(self) -> "_FakeResp":
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return b""
+
+
+def test_entry_exists_false_for_empty_id_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """空・空白のみの entry_id はネットワークに出ず False を返す（誤検出防止）．"""
+
+    def boom(req: object, timeout: int = 30) -> _FakeResp:
+        raise AssertionError("urlopen は呼ばれてはならない")
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", boom)
+    assert entry_exists("u", "b", "k", "") is False
+    assert entry_exists("u", "b", "k", "   ") is False
+
+
+def test_entry_exists_false_for_non_digit_id_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """数字以外の entry_id はネットワークに出ず False を返す（不正 URL 組み立て防止）．
+
+    はてなのエントリ ID は ASCII 数字のみで構成される．全角数字や記号混じりは
+    パストラバーサルや不正 URL を招きうるため，送信前に拒否する．
+    """
+
+    def boom(req: object, timeout: int = 30) -> _FakeResp:
+        raise AssertionError("urlopen は呼ばれてはならない")
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", boom)
+    assert entry_exists("u", "b", "k", "../../etc/passwd") is False
+    assert entry_exists("u", "b", "k", "abc") is False
+    assert entry_exists("u", "b", "k", "12a") is False
+    assert entry_exists("u", "b", "k", "12 34") is False
+    assert entry_exists("u", "b", "k", "１２３") is False
+
+
+def test_entry_exists_true_on_200(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_urlopen(req: object, timeout: int = 30) -> _FakeResp:
+        return _FakeResp()
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", fake_urlopen)
+    assert entry_exists("u", "b", "k", "123") is True
+
+
+def test_entry_exists_false_on_404(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_urlopen(req: object, timeout: int = 30) -> _FakeResp:
+        raise urllib.error.HTTPError("url", 404, "Not Found", {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", fake_urlopen)
+    assert entry_exists("u", "b", "k", "123") is False
+
+
+def test_entry_exists_raises_on_other_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_urlopen(req: object, timeout: int = 30) -> _FakeResp:
+        raise urllib.error.HTTPError("url", 500, "Server Error", {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", fake_urlopen)
+    with pytest.raises(urllib.error.HTTPError):
+        entry_exists("u", "b", "k", "123")
+
+
+# ---------- 空タイトルの誤一致ガード ----------
+
+
+def test_build_title_index_skips_empty_title() -> None:
+    entries = [{"entry_id": "1", "title": "  ", "draft": True}]
+    assert build_title_index(entries) == {}
+
+
+def test_build_title_index_skips_empty_entry_id() -> None:
+    """entry_id が空のエントリは索引に載せない（空 ID の誤書き戻しを防ぐ）．"""
+    entries = [
+        {"entry_id": "", "title": "記事 A", "draft": True},
+        {"entry_id": "2", "title": "記事 A", "draft": True},
+    ]
+    assert build_title_index(entries) == {"記事A": ["2"]}
+
+
+def test_find_title_matches_empty_title_never_matches() -> None:
+    assert find_title_matches("   ", {"記事A": ["1"]}) == []
+
+
+def test_should_suppress_new_post_false_for_empty_title() -> None:
+    assert should_suppress_new_post("  ", {"記事A": ["1"]}, force_new=False) is False
+
+
+# ---------- publish_draft の POST 重複抑止（_send_entry をモック） ----------
+
+
+def _draft_without_id(tmp_path: Path) -> Path:
+    p = tmp_path / "2026-06-21-sample.md"
+    p.write_text('---\ndraft_of: "記事 A"\n---\n本文\n', encoding="utf-8")
+    return p
+
+
+def test_publish_draft_suppresses_post_on_title_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """正規化タイトル一致の既存エントリがあれば POST せず frontmatter も変えない．"""
+    calls: list[str] = []
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        calls.append(method)
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p = _draft_without_id(tmp_path)
+    publish.publish_draft(
+        p, "u", "b", "k", existing_index={"記事A": ["1"]}, force_new=False
+    )
+    assert calls == []
+    assert "hatena_entry_id" not in p.read_text(encoding="utf-8")
+
+
+def test_publish_draft_force_new_posts_despite_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """force_new=True なら一致があっても POST し，ID をクォート付きで書き戻す．"""
+    calls: list[str] = []
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        calls.append(method)
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p = _draft_without_id(tmp_path)
+    publish.publish_draft(
+        p, "u", "b", "k", existing_index={"記事A": ["1"]}, force_new=True
+    )
+    assert calls == ["POST"]
+    assert 'hatena_entry_id: "999"' in p.read_text(encoding="utf-8")
+
+
+def test_publish_draft_no_index_posts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """existing_index=None（既定）のときは抑止せず従来どおり POST する．"""
+    calls: list[str] = []
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        calls.append(method)
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p = _draft_without_id(tmp_path)
+    publish.publish_draft(p, "u", "b", "k")
+    assert calls == ["POST"]
+
+
+def test_publish_draft_post_updates_existing_index(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST 成功時，同一バッチ内の後続抑止のため existing_index に新 ID を足す．"""
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p = _draft_without_id(tmp_path)
+    index: dict[str, list[str]] = {}
+    publish.publish_draft(p, "u", "b", "k", existing_index=index, force_new=False)
+    assert index == {"記事A": ["999"]}
+
+
+def test_publish_draft_second_same_title_suppressed_in_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """同名の新規ドラフトを同じ索引で続けて送ると，2 件目は重複 POST しない．"""
+    calls: list[str] = []
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        calls.append(method)
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p1 = tmp_path / "2026-06-21-a.md"
+    p1.write_text('---\ndraft_of: "記事 A"\n---\n本文1\n', encoding="utf-8")
+    p2 = tmp_path / "2026-06-21-b.md"
+    p2.write_text('---\ndraft_of: "記事 A"\n---\n本文2\n', encoding="utf-8")
+    index: dict[str, list[str]] = {}
+    publish.publish_draft(p1, "u", "b", "k", existing_index=index, force_new=False)
+    publish.publish_draft(p2, "u", "b", "k", existing_index=index, force_new=False)
+    assert calls == ["POST"]
+    assert "hatena_entry_id" not in p2.read_text(encoding="utf-8")
+
+
+# ---------- verify_entries の戻り値（entry_exists をモック） ----------
+
+
+def _draft_with_id(tmp_path: Path, entry_id: str) -> Path:
+    p = tmp_path / f"2026-06-21-{entry_id or 'noid'}.md"
+    fm = f'hatena_entry_id: "{entry_id}"\n' if entry_id else ""
+    p.write_text(f"---\n{fm}---\n本文\n", encoding="utf-8")
+    return p
+
+
+def test_verify_entries_true_when_all_exist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """全 ID が実在すれば True を返す．"""
+    monkeypatch.setattr(publish, "entry_exists", lambda u, b, k, i: True)
+    p = _draft_with_id(tmp_path, "123")
+    assert publish.verify_entries([p], "u", "b", "k") is True
+
+
+def test_verify_entries_false_on_missing_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """404（欠落）が 1 件でもあれば False を返す．"""
+    monkeypatch.setattr(publish, "entry_exists", lambda u, b, k, i: False)
+    p = _draft_with_id(tmp_path, "123")
+    assert publish.verify_entries([p], "u", "b", "k") is False
+
+
+def test_verify_entries_missing_id_is_not_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """hatena_entry_id 未設定は未送信・未回収の通常状態で，失敗に数えない．"""
+
+    def boom(u: str, b: str, k: str, i: str) -> bool:
+        raise AssertionError("ID なしで entry_exists を呼んではならない")
+
+    monkeypatch.setattr(publish, "entry_exists", boom)
+    p = _draft_with_id(tmp_path, "")
+    assert publish.verify_entries([p], "u", "b", "k") is True
+
+
+def test_verify_entries_false_on_http_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """HTTP エラーは検証不能として False を返す（中断はしない）．"""
+
+    def boom(u: str, b: str, k: str, i: str) -> bool:
+        raise urllib.error.HTTPError("url", 500, "Server Error", {}, io.BytesIO(b""))
+
+    monkeypatch.setattr(publish, "entry_exists", boom)
+    p = _draft_with_id(tmp_path, "123")
+    assert publish.verify_entries([p], "u", "b", "k") is False

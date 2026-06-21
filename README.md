@@ -223,17 +223,27 @@ python scripts/publish.py drafts/2026-05-07-my-article.md --env-file /path/to/.e
 
 常に下書きとして投稿する（`<app:draft>yes</app:draft>` をハードコード）．公開判断ははてなブログ管理画面で人間が行う．
 
-複数ファイルをまとめて送れる．送信メソッドは frontmatter で自動判定する．
+複数ファイルをまとめて送れる．送信メソッドは frontmatter の `hatena_entry_id` を主キーに自動判定する．
 
-- `hatena_entry_id` なし：新規 `POST`．成功時にレスポンスの entry ID を frontmatter へ書き戻す．
-- `hatena_entry_id` あり：既存下書きの更新 `PUT`．未公開の下書きを再送する用途．
+- `hatena_entry_id` あり：既存下書きの更新 `PUT`（常に ID 指定）．未公開の下書きを再送する用途．
+- `hatena_entry_id` なし：新規 `POST`．成功時に entry ID をクォート付きで frontmatter へ書き戻す．
 - `hatena_published: true`：公開後ははてな側を真とするため，自動送信を拒否する（安全ガード）．
 
-`--sync` は送信せず，はてな側のエントリ一覧を取得して title 一致で `hatena_entry_id` を frontmatter へ記録する．送信済みだが ID 未記録の下書きを更新可能にするための回収に使う．
+新規 `POST` の前に，正規化タイトル（空白無視）一致の既存下書きがあれば抑止する．タイトル変更による重複作成を防ぐためであり，意図的な新規作成は `--force-new` を付ける．
+
+`--sync` は送信せず，はてな側のエントリ一覧を取得して正規化タイトル一致で `hatena_entry_id` を frontmatter へ記録する．送信済みだが ID 未記録の下書きを更新可能にするための回収に使う．同名（空白無視）が複数あれば取り違えを避けて記録しない．
 
 ```bash
 python scripts/publish.py drafts/*.md --sync
 ```
+
+`--verify` は送信せず，各ドラフトの `hatena_entry_id` をメンバー `GET`（200／404）で検証する．コレクションフィードは結果整合で取りこぼすため，存在確認はメンバー `GET`（`/atom/entry/{id}`）を正本とする．
+
+```bash
+python scripts/publish.py drafts/*.md --verify
+```
+
+欠落（404）や通信エラーが 1 件でもあれば終了コード 1 で終わるため，CI で検証失敗を検知できる．`hatena_entry_id` 未設定は未送信・未回収の通常状態とみなし，失敗には数えない．
 
 ### テスト
 
