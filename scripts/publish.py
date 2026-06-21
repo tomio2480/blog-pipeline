@@ -42,6 +42,7 @@ import argparse
 import base64
 import hashlib
 import html
+import json
 import os
 import re
 import sys
@@ -67,6 +68,26 @@ _TRUTHY = {"true", "yes", "1", "on"}
 
 # はてなカテゴリーの推奨上限（これを超えると警告する）
 CATEGORY_MAX = 10
+
+# はてなフォトライフ AtomPub の投稿先（PostURI）
+FOTOLIFE_POST_URL = "https://f.hatena.ne.jp/atom/post"
+
+# フォトライフのエントリは Atom 0.3 名前空間を使う（ブログ API の Atom とは別）
+FOTOLIFE_ATOM_NS = "http://purl.org/atom/ns#"
+
+# フォルダ指定に使う Dublin Core 名前空間
+DC_NS = "http://purl.org/dc/elements/1.1/"
+
+# フォルダ未指定時の既定フォルダ名（ブログ用画像をまとめる）
+FOTOLIFE_DEFAULT_FOLDER = "blog"
+
+# 拡張子から content-type を引く対応表（マジックバイト判定の補助）
+_IMAGE_EXT_CONTENT_TYPE = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+}
 
 
 def build_collection_url(username: str, blog_id: str) -> str:
@@ -515,6 +536,137 @@ def _send_entry(
     )
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read()
+
+
+def detect_image_content_type(data: bytes, *, filename: str | None = None) -> str:
+    """画像バイト列から content-type を判定する．
+
+    先頭のマジックバイトを優先し，判定できない場合は `filename` の拡張子で補う．
+    どちらでも判定できなければ `ValueError` を送出する（未対応形式を早期に弾く）．
+
+    対応形式は jpeg / png / gif とする．
+    """
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return "image/gif"
+    if filename:
+        ext = Path(filename).suffix.lower()
+        content_type = _IMAGE_EXT_CONTENT_TYPE.get(ext)
+        if content_type:
+            return content_type
+    raise ValueError(
+        f"未対応の画像形式です（jpeg / png / gif のみ対応）: filename={filename!r}"
+    )
+
+
+def build_fotolife_entry(
+    image_data: bytes,
+    content_type: str,
+    title: str,
+    folder: str = FOTOLIFE_DEFAULT_FOLDER,
+) -> bytes:
+    """フォトライフ AtomPub の投稿用エントリ XML を生成する．
+
+    画像は Base64 化して `<content mode="base64" type="image/...">` で載せる．
+    `folder` を渡すと `<dc:subject>` でフォルダを指定する（空文字なら省略）．
+    フォトライフのエントリは Atom 0.3 名前空間（`FOTOLIFE_ATOM_NS`）を使う．
+    """
+    title_esc = html.escape(title)
+    content_type_esc = html.escape(content_type, quote=True)
+    b64 = base64.b64encode(image_data).decode("ascii")
+    subject_xml = ""
+    if folder:
+        folder_esc = html.escape(folder)
+        subject_xml = (
+            f'  <dc:subject xmlns:dc="{DC_NS}">{folder_esc}</dc:subject>\n'
+        )
+    xml = (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        f'<entry xmlns="{FOTOLIFE_ATOM_NS}">\n'
+        f"  <title>{title_esc}</title>\n"
+        f'  <content mode="base64" type="{content_type_esc}">{b64}</content>\n'
+        f"{subject_xml}"
+        "</entry>\n"
+    )
+    return xml.encode("utf-8")
+
+
+def extract_fotolife_syntax(response_body: bytes) -> str:
+    """フォトライフの投稿レスポンスから `hatena:syntax` の f:id 記法を取り出す．
+
+    レスポンスは `<hatena:syntax>f:id:USER:XXXX:image</hatena:syntax>` を含む．
+    名前空間宣言の有無に依らず取り出せるよう，要素名で正規表現照合する．
+    見つからなければ空文字を返す（呼び出し側でアップロード失敗を判定する）．
+    """
+    match = re.search(rb"<hatena:syntax>([^<]+)</hatena:syntax>", response_body)
+    if match:
+        return match.group(1).decode("utf-8").strip()
+    return ""
+
+
+def load_upload_map(path: Path) -> dict[str, str]:
+    """アップロード記録（内容ハッシュ → f:id 記法）を読み込む．
+
+    ファイルが無い・空のときは空辞書を返す．JSON の最上位が辞書でない場合は
+    記録が壊れているとみなし `ValueError` を送出する（黙って握りつぶさない）．
+    """
+    if not path.exists():
+        return {}
+    raw = path.read_text(encoding="utf-8")
+    if not raw.strip():
+        return {}
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError(
+            f"アップロード記録の形式が不正です（最上位は辞書である必要があります）: {path}"
+        )
+    return data
+
+
+def save_upload_map(path: Path, mapping: dict[str, str]) -> None:
+    """アップロード記録を JSON で書き出す（キー順に整列し差分を安定させる）．"""
+    text = json.dumps(mapping, ensure_ascii=False, indent=2, sort_keys=True)
+    path.write_text(text + "\n", encoding="utf-8")
+
+
+def upload_image(
+    image_path: Path,
+    username: str,
+    api_key: str,
+    *,
+    folder: str = FOTOLIFE_DEFAULT_FOLDER,
+    map_path: Path | None = None,
+) -> str:
+    """画像をフォトライフへアップロードし，f:id 記法を返す．
+
+    `map_path` を渡すと内容ハッシュ（SHA-256）で既存記録を照合し，同一内容の
+    画像は再アップロードせず記録済みの f:id 記法を返す．新規アップロード時は
+    記録を更新する．応答から f:id 記法を取得できない場合は `ValueError` とする．
+    """
+    data = image_path.read_bytes()
+    content_key = hashlib.sha256(data).hexdigest()
+    upload_map = load_upload_map(map_path) if map_path is not None else {}
+    cached = upload_map.get(content_key)
+    if cached:
+        return cached
+
+    content_type = detect_image_content_type(data, filename=image_path.name)
+    entry_xml = build_fotolife_entry(data, content_type, image_path.stem, folder)
+    response_body = _send_entry(
+        FOTOLIFE_POST_URL, entry_xml, username, api_key, "POST"
+    )
+    syntax = extract_fotolife_syntax(response_body)
+    if not syntax:
+        raise ValueError(
+            f"アップロード応答から f:id 記法を取得できませんでした: {image_path}"
+        )
+    if map_path is not None:
+        upload_map[content_key] = syntax
+        save_upload_map(map_path, upload_map)
+    return syntax
 
 
 def entry_exists(
