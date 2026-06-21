@@ -89,7 +89,7 @@
 `parse_enex.py`・`list_materials.py`・`publish.py` は標準ライブラリのみで実装している．
 `prompt-maker/generate_prompts.py` も同様である．
 `build_dictionary.py` は形態素解析のため `janome` と `pyyaml` を使用する．
-`build_material.py` は人間メモのフロントマター解析のため `pyyaml` を使用する．
+`build_material.py` と `transcribe_audio.py` はフロントマター解析・辞書注入のため `pyyaml` を使用する．
 テストは `pytest` を使う．
 
 ### Python 環境
@@ -154,6 +154,7 @@ python scripts/transcribe_audio.py \
 ただし初期プロンプトは soft hint であり，誤認識の残りは後段の `transcript-corrector` で補正する前提とする．
 入力音声と中間 WAV，生の文字起こしは再生成できるため `.scratch/` 配下など Git 管理外へ出力する．
 `ffmpeg` は PATH 上にある前提とする．
+環境変数を `.env` から読みたい場合は `--env-file` を指定する（既定は `.env`）．`publish.py` と同じ規約である．
 
 ### `build_material.py` の使い方
 
@@ -171,6 +172,7 @@ python scripts/build_material.py \
 `note_title` と `created` は人間メモのファイル名 stem から導出する．
 人間メモがフロントマターを持つ場合は `tags` 等を引き継ぐ．
 フロントマターの `source` は `audio` で固定する．
+人間メモと文字起こしのファイル名 stem が異なる場合は `--allow-mismatched-basename` を付ける．
 
 ### `build_dictionary.py` の使い方
 

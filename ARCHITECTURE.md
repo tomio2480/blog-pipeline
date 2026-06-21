@@ -42,7 +42,7 @@
 ```
 [人間 録音]
     ↓
-[whisper.cpp 文字起こし]  vocabulary.yml の canonical 語を --prompt へ注入
+[transcribe_audio.py]  whisper.cpp で文字起こし（vocabulary.yml を --prompt 注入）
     ↓
 [人間 メモ Markdown 手書き]  音声と共通の basename で対応づけ
     ↓
@@ -78,8 +78,9 @@
 ```
 blog-pipeline/
 ├─ scripts/
-│  ├─ parse_enex.py           ENEX → Markdown（非推奨．旧素材変換用）
+│  ├─ transcribe_audio.py     録音音声 → 生の文字起こし（whisper.cpp，フェーズ 7）
 │  ├─ build_material.py       人間メモ + 生文字起こし → 2 セクション素材（フェーズ 7）
+│  ├─ parse_enex.py           ENEX → Markdown（非推奨．旧素材変換用）
 │  ├─ list_materials.py       素材一覧の取得
 │  ├─ build_dictionary.py     形態素解析で固有名詞辞書を更新
 │  ├─ publish.py              AtomPub 投稿・更新（常に下書き）
