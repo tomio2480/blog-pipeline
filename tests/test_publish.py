@@ -450,6 +450,26 @@ def test_entry_exists_false_for_empty_id_without_network(
     assert entry_exists("u", "b", "k", "   ") is False
 
 
+def test_entry_exists_false_for_non_digit_id_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """数字以外の entry_id はネットワークに出ず False を返す（不正 URL 組み立て防止）．
+
+    はてなのエントリ ID は ASCII 数字のみで構成される．全角数字や記号混じりは
+    パストラバーサルや不正 URL を招きうるため，送信前に拒否する．
+    """
+
+    def boom(req: object, timeout: int = 30) -> _FakeResp:
+        raise AssertionError("urlopen は呼ばれてはならない")
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", boom)
+    assert entry_exists("u", "b", "k", "../../etc/passwd") is False
+    assert entry_exists("u", "b", "k", "abc") is False
+    assert entry_exists("u", "b", "k", "12a") is False
+    assert entry_exists("u", "b", "k", "12 34") is False
+    assert entry_exists("u", "b", "k", "１２３") is False
+
+
 def test_entry_exists_true_on_200(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_urlopen(req: object, timeout: int = 30) -> _FakeResp:
         return _FakeResp()

@@ -394,8 +394,10 @@ def entry_exists(
 
     `entry_id` が空・空白のみの場合はメンバー URI が作れず，コレクション URI への
     `GET`（フィード）に化けて 200 を誤って返すため，先に False を返す．
+    はてなのエントリ ID は ASCII 数字のみで構成される．全角数字や記号混じりは
+    不正な URL 組み立てを招きうるため，送信前に拒否する（不要な通信も避ける）．
     """
-    if not entry_id or not entry_id.strip():
+    if not entry_id or not (entry_id.isascii() and entry_id.isdigit()):
         return False
     url = build_member_url(username, blog_id, entry_id)
     req = urllib.request.Request(
