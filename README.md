@@ -255,7 +255,7 @@ python scripts/publish.py drafts/*.md --verify
 python scripts/publish.py --list-categories
 ```
 
-`--preview` は送信せず，はてな整形後の本文を標準出力へ出す．段落結合・段落間の余白・カード型リンクの埋め込み化の結果を，更新前に確認する用途に使う．画像のアップロードは行わないため，画像記法は Markdown のまま残る．他のモード指定（`--sync`／`--verify`／`--list-categories`）とは併用できない．
+`--preview` は送信せず，はてな整形後の本文を標準出力へ出す．段落結合・段落間の余白・カード型リンクの埋め込み化の結果を，更新前の確認に使う．画像のアップロードは行わないため，画像記法は Markdown のまま残る．他のモード指定（`--sync`／`--verify`／`--list-categories`）とは併用できない．
 
 ```bash
 python scripts/publish.py drafts/*.md --preview
