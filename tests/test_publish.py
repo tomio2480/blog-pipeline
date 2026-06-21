@@ -45,6 +45,7 @@ from publish import (
     save_upload_map,
     should_suppress_new_post,
     transform_body_images,
+    transform_hatena_body,
     upsert_frontmatter_field,
 )
 
@@ -1569,3 +1570,182 @@ def test_publish_draft_image_upload_http_error_includes_body(
     assert str(draft) in msg
     assert "401" in msg
     assert "auth failed" in msg
+
+
+# ---------- transform_hatena_body ----------
+
+
+def test_transform_hatena_body_joins_wrapped_prose() -> None:
+    """段落内の改行を取り除き 1 行へ結合し，末尾へ半角スペース 2 つを付ける．"""
+    body = "あいう，\nえお．\n"
+    assert transform_hatena_body(body) == "あいう，えお．  \n"
+
+
+def test_transform_hatena_body_inserts_spacer_between_paragraphs() -> None:
+    """連続する段落の間へ区切り行（全角スペース + 半角スペース 2 つ）を挟む．"""
+    body = "だん一の文．\n\nだん二の文．\n"
+    assert (
+        transform_hatena_body(body)
+        == "だん一の文．  \n　  \nだん二の文．  \n"
+    )
+
+
+def test_transform_hatena_body_heading_to_prose_no_spacer() -> None:
+    """見出し→本文の境界には区切り行を挟まず，空行のみで区切る．"""
+    body = "## 見出し\n\n本文です．\n"
+    assert transform_hatena_body(body) == "## 見出し\n\n本文です．  \n"
+
+
+def test_transform_hatena_body_spacer_before_heading() -> None:
+    """段落の次が見出しでも，前後を空行で囲んだ区切り行を挟む．"""
+    body = "本文です．\n\n## 見出し\n"
+    assert transform_hatena_body(body) == "本文です．  \n\n　  \n\n## 見出し\n"
+
+
+def test_transform_hatena_body_passes_through_ordered_list() -> None:
+    """番号付き箇条書きは結合・カード化せずそのまま残す（単独ブロック）．"""
+    body = "1. 一\n2. 二\n"
+    assert transform_hatena_body(body) == "1. 一\n2. 二\n"
+
+
+def test_transform_hatena_body_spacer_around_list() -> None:
+    """箇条書きの前後へ，空行で囲んだ区切り行を挟む．"""
+    body = "導入文．\n\n1. 一\n2. 二\n\n後文．\n"
+    assert transform_hatena_body(body) == (
+        "導入文．  \n\n　  \n\n1. 一\n2. 二\n\n　  \n\n後文．  \n"
+    )
+
+
+def test_transform_hatena_body_embeds_standalone_markdown_link() -> None:
+    """単独行の Markdown リンクは URL を残して埋め込み記法へ変換する．"""
+    body = (
+        "[techbookfest.org/x]"
+        "(https://techbookfest.org/product/abc?productVariantID=xyz)\n"
+    )
+    assert transform_hatena_body(body) == (
+        "[https://techbookfest.org/product/abc?productVariantID=xyz"
+        ":embed:cite]\n"
+    )
+
+
+def test_transform_hatena_body_embeds_bare_url() -> None:
+    """単独行の裸 URL も埋め込み記法（cite 付き）へ変換する．"""
+    body = "https://www.youtube.com/watch?v=fft1OojZyLs\n"
+    assert transform_hatena_body(body) == (
+        "[https://www.youtube.com/watch?v=fft1OojZyLs:embed:cite]\n"
+    )
+
+
+def test_transform_hatena_body_keeps_inline_link_in_prose() -> None:
+    """文中のインラインリンクは埋め込み化せず，段落結合のみ行う．"""
+    body = "[IPSJ](https://www.ipsj.or.jp/)（情報処理学会）の任期が，\n終わりました．\n"
+    assert transform_hatena_body(body) == (
+        "[IPSJ](https://www.ipsj.or.jp/)（情報処理学会）の任期が，"
+        "終わりました．  \n"
+    )
+
+
+def test_transform_hatena_body_passes_through_image_markdown() -> None:
+    """画像記法はカード化・結合せず残し，画像処理（後段）へ委ねる．"""
+    body = '![代替テキスト](img/a.png "図1")\n'
+    assert transform_hatena_body(body) == body
+
+
+def test_transform_hatena_body_prose_link_prose_structure() -> None:
+    """段落・単独リンク・段落の並びで，埋め込みの前後へ区切り行を挟む．"""
+    body = "前段の文．\n\n[a](https://e/x)\n\n後段の文．\n"
+    assert transform_hatena_body(body) == (
+        "前段の文．  \n\n　  \n\n[https://e/x:embed:cite]"
+        "\n\n　  \n\n後段の文．  \n"
+    )
+
+
+def test_transform_hatena_body_keeps_code_fence_verbatim() -> None:
+    """コードフェンス内は結合せず，空行を含めてそのまま残す．"""
+    body = "```\na = 1\n\nb = 2\n```\n"
+    assert transform_hatena_body(body) == body
+
+
+def test_transform_hatena_body_drops_leading_intro_heading() -> None:
+    """先頭の導入見出し（h2）は落とし，本文から始める．"""
+    body = "## 導入\n\n本文の最初．\n"
+    assert transform_hatena_body(body) == "本文の最初．  \n"
+
+
+def test_transform_hatena_body_drops_leading_hajimeni_heading() -> None:
+    """「はじめに」も導入見出しとみなして落とす．"""
+    body = "## はじめに\n\n本文の最初．\n"
+    assert transform_hatena_body(body) == "本文の最初．  \n"
+
+
+def test_transform_hatena_body_keeps_non_leading_intro_heading() -> None:
+    """先頭でない導入見出しは落とさない．"""
+    body = "前文．\n\n## 導入\n\n本文．\n"
+    assert transform_hatena_body(body) == (
+        "前文．  \n\n　  \n\n## 導入\n\n本文．  \n"
+    )
+
+
+def test_transform_hatena_body_keeps_leading_non_intro_heading() -> None:
+    """導入以外の先頭見出しは落とさない．"""
+    body = "## まとめ\n\n本文．\n"
+    assert transform_hatena_body(body) == "## まとめ\n\n本文．  \n"
+
+
+def test_transform_hatena_body_keeps_leading_intro_at_h3() -> None:
+    """h3 の導入見出しは対象外とし，落とさない（落とすのは h2 のみ）．"""
+    body = "### 導入\n\n本文．\n"
+    assert transform_hatena_body(body) == "### 導入\n\n本文．  \n"
+
+
+def test_transform_hatena_body_empty() -> None:
+    """空本文はそのまま返す．"""
+    assert transform_hatena_body("") == ""
+
+
+def test_publish_draft_applies_hatena_body_transform(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """送信本文へはてな整形（段落結合・単独リンクの埋め込み化）が適用される．"""
+    draft = tmp_path / "2026-06-21-fmt.md"
+    draft.write_text(
+        '---\ndraft_of: "整形記事"\nhatena_entry_id: "777"\n---\n'
+        "前段の文，\nつづき．\n\n"
+        "[note.com/x](https://note.com/tomio2480/n/abc)\n",
+        encoding="utf-8",
+    )
+
+    sent: dict[str, bytes] = {}
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        sent["body"] = xml
+        return b"<id>tag:...-777</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    publish.publish_draft(draft, "u", "b", "k")
+
+    body_xml = sent["body"].decode("utf-8")
+    # 段落内の改行が結合され，末尾へ半角スペース 2 つが付く．
+    assert "前段の文，つづき．  " in body_xml
+    # 単独行リンクが埋め込み記法へ変換される．
+    assert "[https://note.com/tomio2480/n/abc:embed:cite]" in body_xml
+
+
+# ---------- preview_drafts ----------
+
+
+def test_preview_drafts_writes_utf8_bytes(
+    tmp_path: Path, capsysbinary: pytest.CaptureFixture
+) -> None:
+    """プレビューは UTF-8 バイト列で出力する（コンソールの cp932 に依存しない）．"""
+    draft = tmp_path / "2026-06-21-emdash.md"
+    # em ダッシュ（U+2014）は cp932 で表現できず，print 経由だと環境により落ちる．
+    draft.write_text(
+        '---\ndraft_of: "ダッシュ記事"\n---\n本文 — つづき．\n\n'
+        "[t](https://example.com/x)\n",
+        encoding="utf-8",
+    )
+    publish.preview_drafts([draft])
+    out = capsysbinary.readouterr().out.decode("utf-8")
+    assert "本文 — つづき．  " in out
+    assert "[https://example.com/x:embed:cite]" in out
