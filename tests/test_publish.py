@@ -1426,6 +1426,36 @@ def test_transform_body_images_normalizes_backslash_path(tmp_path: Path) -> None
     assert out == "<figure>\n[f:id:u:1:image:alt=代替]\n</figure>\n"
 
 
+def test_transform_body_images_decodes_percent_encoded_path(tmp_path: Path) -> None:
+    """パーセントエンコードされたパス（%20 や日本語）はデコードして上げる．"""
+    calls: list[Path] = []
+
+    def fake_upload(path: Path) -> str:
+        calls.append(path)
+        return "f:id:u:1:image"
+
+    out = transform_body_images(
+        "![代替](assets/sub/%E5%9B%B3%201.png)\n",
+        base_dir=tmp_path,
+        upload_fn=fake_upload,
+    )
+    assert calls == [tmp_path / "assets" / "sub" / "図 1.png"]
+    assert out == "<figure>\n[f:id:u:1:image:alt=代替]\n</figure>\n"
+
+
+def test_transform_body_images_rejects_percent_encoded_traversal(
+    tmp_path: Path,
+) -> None:
+    """エンコードされた親参照（%2e%2e%2f）もデコード後に弾く．"""
+    def boom(path: Path) -> str:
+        raise AssertionError("エンコードされた親参照を上げてはならない")
+
+    with pytest.raises(ValueError):
+        transform_body_images(
+            "![代替](%2e%2e%2fsecret/a.png)\n", base_dir=tmp_path, upload_fn=boom
+        )
+
+
 def test_transform_body_images_rejects_absolute_path(tmp_path: Path) -> None:
     def boom(path: Path) -> str:
         raise AssertionError("絶対パスはアップロードしてはならない")

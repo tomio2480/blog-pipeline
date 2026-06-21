@@ -51,6 +51,7 @@ import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
@@ -785,11 +786,14 @@ def transform_body_images(
         caption = match.group("caption_d") or match.group("caption_s")
         if is_external_image(target):
             return render_image_figure(alt=alt, caption=caption, src=target)
-        # ローカル画像はリポジトリ内の相対パス参照を規約とする．絶対パスと
-        # 親ディレクトリ参照は base_dir の外を指しうるため，明確なエラーで弾く．
+        # ローカル画像はリポジトリ内の相対パス参照を規約とする．
+        # パーセントエンコード（`%20` や日本語の `%E5%9B%B3` 等）を先にデコードする．
+        # デコード後に検証することで，`%2e%2e%2f` のようなエンコードされた親参照も弾く．
+        decoded = urllib.parse.unquote(target)
+        # 絶対パスと親ディレクトリ参照は base_dir の外を指しうるため明確なエラーで弾く．
         # POSIX 区切りと Windows 区切りの双方で解釈し，実行 OS に依存せず判定する
         # （Windows の `Path("/x").is_absolute()` は False になるため）．
-        posix, win = PurePosixPath(target), PureWindowsPath(target)
+        posix, win = PurePosixPath(decoded), PureWindowsPath(decoded)
         if posix.is_absolute() or win.is_absolute():
             raise ValueError(
                 f"画像は相対パスで指定してください（絶対パスは不可）: {target}"
@@ -800,7 +804,7 @@ def transform_body_images(
             )
         # Windows 区切り（`\`）を `/` へ正規化し，非 Windows 環境でも参照できる
         # ようにする．Markdown は `/` 区切りが通例だが，著者が `\` を書いても拾う．
-        normalized = PureWindowsPath(target).as_posix()
+        normalized = PureWindowsPath(decoded).as_posix()
         fid = upload_fn(base_dir / normalized)
         return render_image_figure(alt=alt, caption=caption, fid=fid)
 
