@@ -28,6 +28,7 @@ from publish import (
     fetch_categories,
     find_title_matches,
     get_env,
+    list_categories,
     load_env_file,
     normalize_categories,
     normalize_title,
@@ -989,3 +990,39 @@ def test_publish_draft_warns_when_over_max_categories(
     publish.publish_draft(p, "u", "b", "k")
     captured = capsys.readouterr()
     assert "10" in captured.err
+
+
+# ---------- list_categories（標準出力・ネットワークはモック） ----------
+
+
+def test_list_categories_prints_terms_one_per_line(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """既存カテゴリーの term を 1 行 1 件で標準出力へ出す．"""
+
+    def fake_urlopen(req: object, timeout: int = 30) -> _FakeCategoryResp:
+        return _FakeCategoryResp(SAMPLE_CATEGORY_DOC)
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", fake_urlopen)
+    list_categories("u", "b", "k")
+    captured = capsys.readouterr()
+    assert captured.out == "Perl\nコミュニティ\n"
+
+
+def test_list_categories_empty_prints_nothing(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """カテゴリーが無ければ標準出力は空とする．"""
+    empty_doc = (
+        b'<?xml version="1.0" encoding="utf-8"?>'
+        b'<app:categories xmlns:app="http://www.w3.org/2007/app" '
+        b'xmlns:atom="http://www.w3.org/2005/Atom" fixed="no"></app:categories>'
+    )
+
+    def fake_urlopen(req: object, timeout: int = 30) -> _FakeCategoryResp:
+        return _FakeCategoryResp(empty_doc)
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", fake_urlopen)
+    list_categories("u", "b", "k")
+    captured = capsys.readouterr()
+    assert captured.out == ""
