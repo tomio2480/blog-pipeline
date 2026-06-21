@@ -1666,6 +1666,38 @@ def test_transform_hatena_body_keeps_code_fence_verbatim() -> None:
     assert transform_hatena_body(body) == body
 
 
+def test_transform_hatena_body_drops_leading_intro_heading() -> None:
+    """先頭の導入見出し（h2）は落とし，本文から始める．"""
+    body = "## 導入\n\n本文の最初．\n"
+    assert transform_hatena_body(body) == "本文の最初．  \n"
+
+
+def test_transform_hatena_body_drops_leading_hajimeni_heading() -> None:
+    """「はじめに」も導入見出しとみなして落とす．"""
+    body = "## はじめに\n\n本文の最初．\n"
+    assert transform_hatena_body(body) == "本文の最初．  \n"
+
+
+def test_transform_hatena_body_keeps_non_leading_intro_heading() -> None:
+    """先頭でない導入見出しは落とさない．"""
+    body = "前文．\n\n## 導入\n\n本文．\n"
+    assert transform_hatena_body(body) == (
+        "前文．  \n\n　  \n\n## 導入\n\n本文．  \n"
+    )
+
+
+def test_transform_hatena_body_keeps_leading_non_intro_heading() -> None:
+    """導入以外の先頭見出しは落とさない．"""
+    body = "## まとめ\n\n本文．\n"
+    assert transform_hatena_body(body) == "## まとめ\n\n本文．  \n"
+
+
+def test_transform_hatena_body_keeps_leading_intro_at_h3() -> None:
+    """h3 の導入見出しは対象外とし，落とさない（落とすのは h2 のみ）．"""
+    body = "### 導入\n\n本文．\n"
+    assert transform_hatena_body(body) == "### 導入\n\n本文．  \n"
+
+
 def test_transform_hatena_body_empty() -> None:
     """空本文はそのまま返す．"""
     assert transform_hatena_body("") == ""

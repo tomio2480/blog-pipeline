@@ -126,6 +126,13 @@ _HATENA_EMBED_TEMPLATE = "[{url}:embed:cite]"
 # 空行に見える 1 行を作るため，はてなブログ上で段落間の余白が確保される．
 _PARAGRAPH_SPACER = "　  "
 
+# ATX 見出し（`#` の並び＋本文）を捕捉する．レベル（`#` の数）と表題を取り出す．
+_HEADING_PATTERN = re.compile(r"^(#+)\s+(.*?)\s*$")
+
+# 先頭にあるとき落とす導入見出し（h2）の表題．著者の慣習で，導入の見出しは
+# 書かずに本文から始める．ドラフトでは構成のため残し，送信時にここで落とす．
+_INTRO_HEADING_TITLES = {"導入", "はじめに"}
+
 
 def build_collection_url(username: str, blog_id: str) -> str:
     """コレクション URI（新規 POST 先・一覧取得先）を組み立てる．"""
@@ -855,6 +862,24 @@ def _render_block(kind: str, block: str) -> str:
     return block
 
 
+def _drop_intro_heading(blocks: list[str]) -> list[str]:
+    """先頭ブロックが導入見出し（h2）なら取り除いたブロック列を返す．
+
+    著者の慣習として，導入にあたる見出しは書かず本文から始める．ドラフトでは
+    構成のため `## 導入` 等を残し，送信時にここで落とす．対象は先頭の h2 で，
+    表題が `_INTRO_HEADING_TITLES` に一致する場合のみとする（h3 以下は対象外）．
+    """
+    if not blocks:
+        return blocks
+    first = blocks[0]
+    if "\n" in first:
+        return blocks
+    match = _HEADING_PATTERN.match(first.strip())
+    if match and len(match.group(1)) == 2 and match.group(2) in _INTRO_HEADING_TITLES:
+        return blocks[1:]
+    return blocks
+
+
 def _needs_spacer(prev: str, nxt: str) -> bool:
     """ブロック境界へ区切り行（`_PARAGRAPH_SPACER`）を挟むかどうかを判定する．
 
@@ -885,10 +910,11 @@ def transform_hatena_body(body: str) -> str:
     埋め込み記法 `[URL:embed:cite]` へ変換する．文中のインラインリンクは対象外．
     見出し・箇条書き・画像・コードフェンス・引用・HTML・表は変換しない．
     画像記法は後段の `transform_body_images` へ委ねるため，ここでは残す．
+    先頭の導入見出し（h2）は著者の慣習に従い落とし，本文から始める．
     """
-    blocks = _split_body_blocks(body)
+    blocks = _drop_intro_heading(_split_body_blocks(body))
     if not blocks:
-        return body
+        return ""
 
     kinds = [_classify_block(b) for b in blocks]
     rendered = [_render_block(k, b) for k, b in zip(kinds, blocks)]
