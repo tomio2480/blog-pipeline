@@ -55,7 +55,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 # YAML フロントマターのデリミタ
@@ -95,11 +95,13 @@ _IMAGE_EXT_CONTENT_TYPE = {
 }
 
 # 本文中の Markdown 画像記法 `![alt](target "caption")` を検出する正規表現．
-# target は空白・丸括弧を含まない 1 トークン（相対パスまたは URL）．
+# target は空白を含まない 1 トークン（相対パスまたは URL）．丸括弧を含む
+# ファイル名（例: `image(1).png`）も拾えるよう貪欲一致とし，末尾の `)` は
+# バックトラックで閉じ括弧へ割り当てる．
 # caption は省略可で，直前に空白を挟み二重引用符または単一引用符で囲む．
 _IMAGE_MD_PATTERN = re.compile(
     r"!\[(?P<alt>[^\]]*)\]"
-    r"\(\s*(?P<target>[^\s()]+)"
+    r"\(\s*(?P<target>[^\s]+)"
     r"(?:\s+\"(?P<caption_d>[^\"]*)\"|\s+'(?P<caption_s>[^']*)')?"
     r"\s*\)"
 )
@@ -710,8 +712,9 @@ def is_external_image(target: str) -> bool:
     """画像の参照先が外部 URL かどうかを判定する（http / https のみ外部とみなす）．
 
     外部 URL はアップロード対象外とし，本文からそのまま `<img>` で参照する．
+    スキームは大文字小文字を区別しないため，小文字化して判定する．
     """
-    return target.startswith(("http://", "https://"))
+    return target.lower().startswith(("http://", "https://"))
 
 
 def render_image_figure(
@@ -746,8 +749,8 @@ def render_image_figure(
                 f"{alt!r}"
             )
         lines.append(f"[{fid}:alt={alt}]")
-    else:
-        src_esc = html.escape(src, quote=True)  # type: ignore[arg-type]
+    elif src is not None:
+        src_esc = html.escape(src, quote=True)
         alt_esc = html.escape(alt, quote=True)
         lines.append(f'<img src="{src_esc}" alt="{alt_esc}">')
     if caption:
@@ -782,6 +785,19 @@ def transform_body_images(
         caption = match.group("caption_d") or match.group("caption_s")
         if is_external_image(target):
             return render_image_figure(alt=alt, caption=caption, src=target)
+        # ローカル画像はリポジトリ内の相対パス参照を規約とする．絶対パスと
+        # 親ディレクトリ参照は base_dir の外を指しうるため，明確なエラーで弾く．
+        # POSIX 区切りと Windows 区切りの双方で解釈し，実行 OS に依存せず判定する
+        # （Windows の `Path("/x").is_absolute()` は False になるため）．
+        posix, win = PurePosixPath(target), PureWindowsPath(target)
+        if posix.is_absolute() or win.is_absolute():
+            raise ValueError(
+                f"画像は相対パスで指定してください（絶対パスは不可）: {target}"
+            )
+        if ".." in posix.parts or ".." in win.parts:
+            raise ValueError(
+                f"画像パスに親ディレクトリ参照（..）は使えません: {target}"
+            )
         fid = upload_fn(base_dir / target)
         return render_image_figure(alt=alt, caption=caption, fid=fid)
 

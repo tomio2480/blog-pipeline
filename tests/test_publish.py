@@ -1263,6 +1263,11 @@ def test_is_external_image_false_for_relative_path() -> None:
     assert is_external_image("/abs/a.png") is False
 
 
+def test_is_external_image_case_insensitive_scheme() -> None:
+    assert is_external_image("HTTPS://example.com/a.png") is True
+    assert is_external_image("Http://example.com/a.png") is True
+
+
 # ---------- render_image_figure ----------
 
 
@@ -1389,6 +1394,41 @@ def test_transform_body_images_missing_alt_raises_before_upload(
 
     with pytest.raises(ValueError):
         transform_body_images("![](a.png)\n", base_dir=tmp_path, upload_fn=boom)
+
+
+def test_transform_body_images_handles_parens_in_path(tmp_path: Path) -> None:
+    """丸括弧を含むファイル名（例: image(1).png）も拾えて置換する．"""
+    calls: list[Path] = []
+
+    def fake_upload(path: Path) -> str:
+        calls.append(path)
+        return "f:id:u:1:image"
+
+    out = transform_body_images(
+        "![代替](assets/image(1).png)\n", base_dir=tmp_path, upload_fn=fake_upload
+    )
+    assert calls == [tmp_path / "assets/image(1).png"]
+    assert out == "<figure>\n[f:id:u:1:image:alt=代替]\n</figure>\n"
+
+
+def test_transform_body_images_rejects_absolute_path(tmp_path: Path) -> None:
+    def boom(path: Path) -> str:
+        raise AssertionError("絶対パスはアップロードしてはならない")
+
+    with pytest.raises(ValueError):
+        transform_body_images(
+            "![代替](/etc/passwd.png)\n", base_dir=tmp_path, upload_fn=boom
+        )
+
+
+def test_transform_body_images_rejects_parent_traversal(tmp_path: Path) -> None:
+    def boom(path: Path) -> str:
+        raise AssertionError("親ディレクトリ参照はアップロードしてはならない")
+
+    with pytest.raises(ValueError):
+        transform_body_images(
+            "![代替](../secret/a.png)\n", base_dir=tmp_path, upload_fn=boom
+        )
 
 
 def test_transform_body_images_no_images_unchanged(tmp_path: Path) -> None:
