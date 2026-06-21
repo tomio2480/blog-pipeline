@@ -5,6 +5,8 @@
 - 標準ライブラリのみで実装する．サードパーティ依存ゼロ．
 - `<app:draft>yes</app:draft>` をハードコードし，公開フラグは持たせない．
   公開判断ははてなブログの管理画面で人間が行う．
+- frontmatter の `categories`（配列）を `<category term="...">` として送る．
+  本文からの選定は個人化版リポジトリ側が担い，本スクリプトは送信機構のみを担う．
 - 送信メソッドは frontmatter の `hatena_entry_id` を主キーとして自動判定する．
   `hatena_entry_id` あり → 既存下書きの更新 PUT（常に ID 指定）．
   `hatena_entry_id` なし → 新規 POST（成功時に entry ID をクォート付きで書き戻す）．
@@ -62,10 +64,18 @@ APP_NS = "http://www.w3.org/2007/app"
 # hatena_published が真とみなす値
 _TRUTHY = {"true", "yes", "1", "on"}
 
+# はてなカテゴリーの推奨上限（これを超えると警告する）
+CATEGORY_MAX = 10
+
 
 def build_collection_url(username: str, blog_id: str) -> str:
     """コレクション URI（新規 POST 先・一覧取得先）を組み立てる．"""
     return f"https://blog.hatena.ne.jp/{username}/{blog_id}/atom/entry"
+
+
+def build_category_url(username: str, blog_id: str) -> str:
+    """カテゴリ文書 URI（既存カテゴリー一覧の取得先）を組み立てる．"""
+    return f"https://blog.hatena.ne.jp/{username}/{blog_id}/atom/category"
 
 
 def build_member_url(username: str, blog_id: str, entry_id: str) -> str:
@@ -134,8 +144,38 @@ def build_wsse_header(username: str, api_key: str) -> str:
     )
 
 
-def parse_frontmatter(text: str, *, source: str = "") -> tuple[dict[str, str], str]:
+def _strip_matching_quotes(value: str) -> str:
+    """前後が同種のクォート（`"` / `'`）で囲まれていれば 1 組だけ外す．"""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+        return value[1:-1]
+    return value
+
+
+def parse_inline_list(value: str) -> list[str]:
+    """`[a, b, c]` 形式のインラインフロー配列を要素リストへ分解する．
+
+    各要素は前後の空白とクォートを外す．空要素は捨てる．
+    """
+    inner = value[1:-1]
+    items: list[str] = []
+    for part in inner.split(","):
+        item = _strip_matching_quotes(part.strip()).strip()
+        if item:
+            items.append(item)
+    return items
+
+
+def parse_frontmatter(
+    text: str, *, source: str = ""
+) -> tuple[dict[str, str | list[str]], str]:
     """YAML フロントマターをシンプルに解析する．
+
+    スカラー（`key: value`）に加え，配列も読む．配列は次の 2 形式に対応する．
+
+    - インラインフロー: `categories: [PHP, コミュニティ]`
+    - ブロック: `categories:` の直後に `  - PHP` のような要素行が続く形式
+
+    配列値は `list[str]`，それ以外は `str` として返す．
 
     Args:
         text: ファイル全体のテキスト
@@ -167,23 +207,99 @@ def parse_frontmatter(text: str, *, source: str = "") -> tuple[dict[str, str], s
         )
         return {}, text
 
-    fm_dict: dict[str, str] = {}
-    for line in fm_lines:
-        if ":" in line and not line.startswith(" ") and not line.startswith("-"):
+    fm_dict: dict[str, str | list[str]] = {}
+    n = len(fm_lines)
+    i = 0
+    while i < n:
+        line = fm_lines[i]
+        # コメント行（`#` 始まり）はコロンを含んでもキーにしない．
+        if line.strip().startswith("#"):
+            i += 1
+            continue
+        # キー行は行頭が空白・タブ・`-` でなく `:` を含む．
+        if ":" in line and not line.startswith((" ", "\t", "-")):
             key, _, value = line.partition(":")
-            fm_dict[key.strip()] = value.strip().strip("\"'")
+            key = key.strip()
+            value = value.strip()
+            if value.startswith("[") and value.endswith("]"):
+                fm_dict[key] = parse_inline_list(value)
+                i += 1
+                continue
+            if value == "":
+                # ブロック形式の配列を先読みする（`  - item` 行の連続）．
+                # 要素間の空行・コメント行は読み飛ばし，次のキー行で止める．
+                items: list[str] = []
+                j = i + 1
+                while j < n:
+                    nxt = fm_lines[j].strip()
+                    if not nxt or nxt.startswith("#"):
+                        j += 1
+                        continue
+                    if nxt.startswith("-"):
+                        item = _strip_matching_quotes(nxt[1:].strip()).strip()
+                        if item:
+                            items.append(item)
+                        j += 1
+                    else:
+                        break
+                if items:
+                    fm_dict[key] = items
+                    i = j
+                    continue
+                fm_dict[key] = ""
+                i += 1
+                continue
+            fm_dict[key] = _strip_matching_quotes(value)
+        i += 1
 
     body = "".join(lines[body_start:]).lstrip("\n")
     return fm_dict, body
 
 
-def build_atom_entry(title: str, body: str) -> bytes:
+def normalize_categories(raw: str | list[str] | None) -> list[str]:
+    """frontmatter の categories を送信前に正規化する．
+
+    - `None` は空リストにする．
+    - 文字列スカラーは 1 要素のリストへ寄せる（誤って文字単位に割れない）．
+    - リスト・タプルの要素は `str()` 化する．それ以外のスカラーも 1 要素へ寄せて
+      `str()` 化する（将来 YAML パーサーへ移行し数値スカラーが来ても落ちない防御）．
+    - 各要素は前後空白を外し，空要素は捨てる．
+    - 順序を保ったまま重複を除く．
+    """
+    if raw is None:
+        items: list[str] = []
+    elif isinstance(raw, str):
+        items = [raw]
+    elif isinstance(raw, (list, tuple)):
+        items = [str(x) for x in raw]
+    else:
+        items = [str(raw)]
+
+    result: list[str] = []
+    seen: set[str] = set()
+    for item in items:
+        term = item.strip()
+        if term and term not in seen:
+            seen.add(term)
+            result.append(term)
+    return result
+
+
+def build_atom_entry(
+    title: str, body: str, categories: list[str] | None = None
+) -> bytes:
     """AtomPub エントリ XML を生成する．
 
     `<app:draft>yes</app:draft>` は常にセットし，公開フラグは持たせない．
+    `categories` を渡すと `<category term="...">` を順に出力する（空・None は出さない）．
+    term は属性値のため `quote=True` でエスケープする．
     """
     title_esc = html.escape(title)
     body_esc = html.escape(body)
+    category_xml = "".join(
+        f'  <category term="{html.escape(term, quote=True)}" />\n'
+        for term in (categories or [])
+    )
     xml = (
         '<?xml version="1.0" encoding="utf-8"?>\n'
         '<entry xmlns="http://www.w3.org/2005/Atom"\n'
@@ -192,6 +308,7 @@ def build_atom_entry(title: str, body: str) -> bytes:
         '  <content type="text/x-markdown">'
         f"{body_esc}"
         "</content>\n"
+        f"{category_xml}"
         "  <app:control>\n"
         "    <app:draft>yes</app:draft>\n"
         "  </app:control>\n"
@@ -212,7 +329,7 @@ def extract_entry_id(response_body: bytes) -> str:
     return ""
 
 
-def decide_publish_method(fm: dict[str, str]) -> tuple[str, str | None]:
+def decide_publish_method(fm: dict[str, str | list[str]]) -> tuple[str, str | None]:
     """フロントマターから送信メソッドを判定する．
 
     - `hatena_published` が真 → 公開後ははてな側を真とするため自動送信を拒否（例外）．
@@ -225,7 +342,8 @@ def decide_publish_method(fm: dict[str, str]) -> tuple[str, str | None]:
             "hatena_published が真のため自動送信を拒否します．"
             "公開後ははてなブログ側を真とし，publish.py からの更新は行いません．"
         )
-    entry_id: str | None = fm.get("hatena_entry_id") or None
+    entry_id_raw = fm.get("hatena_entry_id")
+    entry_id: str | None = entry_id_raw if isinstance(entry_id_raw, str) else None
     if entry_id:
         return ("PUT", entry_id)
     return ("POST", None)
@@ -269,6 +387,24 @@ def parse_feed_next_link(xml_bytes: bytes) -> str | None:
         if link.get("rel") == "next":
             return link.get("href")
     return None
+
+
+def parse_category_document(xml_bytes: bytes) -> list[str]:
+    """カテゴリ文書（`app:categories`）を解析し，既存カテゴリーの term 一覧を返す．
+
+    はてなの `GET /atom/category` は `app:categories` を根に `atom:category`
+    要素（`term` 属性）を並べる．`term` が空の要素は除く．
+
+    入力は認証済みはてな AtomPub API（HTTPS）のレスポンスに限るため，
+    `parse_collection_feed` と同じ信頼境界の扱いとし，`defusedxml` は導入しない．
+    """
+    root: ET.Element = ET.fromstring(xml_bytes)
+    terms: list[str] = []
+    for cat in root.findall(f"{{{ATOM_NS}}}category"):
+        term = cat.get("term")
+        if term:
+            terms.append(term)
+    return terms
 
 
 def normalize_title(title: str) -> str:
@@ -460,7 +596,16 @@ def publish_draft(
         )
         return
 
-    entry_xml = build_atom_entry(title, body)
+    categories = normalize_categories(fm.get("categories"))
+    if len(categories) > CATEGORY_MAX:
+        print(
+            f"Warning: {draft_path}: categories が {len(categories)} 件で上限 "
+            f"{CATEGORY_MAX} 件を超えています．はてな側で一部が無視される可能性が"
+            "あります．frontmatter を見直してください．",
+            file=sys.stderr,
+        )
+
+    entry_xml = build_atom_entry(title, body, categories)
     if method == "PUT":
         url = build_member_url(username, blog_id, entry_id)  # type: ignore[arg-type]
     else:
@@ -528,6 +673,27 @@ def fetch_all_entries(
         url = parse_feed_next_link(xml_bytes)
         pages += 1
     return entries
+
+
+def fetch_categories(
+    username: str,
+    blog_id: str,
+    api_key: str,
+) -> list[str]:
+    """カテゴリ文書 URI を `GET` し，既存カテゴリーの term 一覧を返す．
+
+    本文からのカテゴリー選定（blog-private 側）が，既存カテゴリーを優先する
+    ための入力に使う．取得は 1 リクエストで，ページングはしない．
+    """
+    url = build_category_url(username, blog_id)
+    req = urllib.request.Request(
+        url,
+        headers={"X-WSSE": build_wsse_header(username, api_key)},
+        method="GET",
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        xml_bytes = resp.read()
+    return parse_category_document(xml_bytes)
 
 
 def sync_entry_ids(

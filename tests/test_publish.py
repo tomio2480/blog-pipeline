@@ -17,6 +17,7 @@ import pytest
 import publish
 from publish import (
     build_atom_entry,
+    build_category_url,
     build_collection_url,
     build_member_url,
     build_title_index,
@@ -24,10 +25,13 @@ from publish import (
     decide_publish_method,
     entry_exists,
     extract_entry_id,
+    fetch_categories,
     find_title_matches,
     get_env,
     load_env_file,
+    normalize_categories,
     normalize_title,
+    parse_category_document,
     parse_collection_feed,
     parse_frontmatter,
     should_suppress_new_post,
@@ -672,3 +676,316 @@ def test_verify_entries_false_on_http_error(
     monkeypatch.setattr(publish, "entry_exists", boom)
     p = _draft_with_id(tmp_path, "123")
     assert publish.verify_entries([p], "u", "b", "k") is False
+
+
+# ---------- parse_frontmatter（categories 配列） ----------
+
+
+def test_parse_frontmatter_inline_list() -> None:
+    """`categories: [PHP, コミュニティ]` をリストとして読む．"""
+    text = "---\ndraft_of: t\ncategories: [PHP, コミュニティ]\n---\nbody\n"
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+    assert fm["draft_of"] == "t"
+
+
+def test_parse_frontmatter_inline_list_single() -> None:
+    text = "---\ncategories: [PHP]\n---\nbody\n"
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP"]
+
+
+def test_parse_frontmatter_inline_list_quoted_items() -> None:
+    """引用符付きの要素はクォートを外して読む．"""
+    text = '---\ncategories: ["PHP", \'地域 コミュニティ\']\n---\nbody\n'
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "地域 コミュニティ"]
+
+
+def test_parse_frontmatter_inline_list_empty() -> None:
+    text = "---\ncategories: []\n---\nbody\n"
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == []
+
+
+def test_parse_frontmatter_inline_list_drops_empty_items() -> None:
+    text = "---\ncategories: [PHP, , コミュニティ]\n---\nbody\n"
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+
+
+def test_parse_frontmatter_block_list() -> None:
+    """ブロック形式（`- item`）も配列として読む．"""
+    text = (
+        "---\n"
+        "draft_of: t\n"
+        "categories:\n"
+        "  - PHP\n"
+        "  - コミュニティ\n"
+        "---\n"
+        "body\n"
+    )
+    fm, body = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+    assert fm["draft_of"] == "t"
+    assert body == "body\n"
+
+
+def test_parse_frontmatter_block_list_stops_at_next_key() -> None:
+    """ブロック配列の直後に別キーが来ても取り違えない．"""
+    text = (
+        "---\n"
+        "categories:\n"
+        "  - PHP\n"
+        "  - コミュニティ\n"
+        "media: hatena\n"
+        "---\n"
+        "body\n"
+    )
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+    assert fm["media"] == "hatena"
+
+
+def test_parse_frontmatter_block_list_skips_blank_lines() -> None:
+    """ブロック配列の要素間に空行があっても以降の要素を取りこぼさない．"""
+    text = (
+        "---\n"
+        "categories:\n"
+        "  - PHP\n"
+        "\n"
+        "  - コミュニティ\n"
+        "media: hatena\n"
+        "---\n"
+        "body\n"
+    )
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+    assert fm["media"] == "hatena"
+
+
+def test_parse_frontmatter_block_list_skips_comment_lines() -> None:
+    """ブロック配列の要素間にコメント行（`#`）があっても取りこぼさない．"""
+    text = (
+        "---\n"
+        "categories:\n"
+        "  - PHP\n"
+        "  # 補足コメント\n"
+        "  - コミュニティ\n"
+        "---\n"
+        "body\n"
+    )
+    fm, _ = parse_frontmatter(text)
+    assert fm["categories"] == ["PHP", "コミュニティ"]
+
+
+def test_parse_frontmatter_skips_root_comment_with_colon() -> None:
+    """ルートのコロンを含むコメント行をキーとして誤解析しない．"""
+    text = "---\n# これはコメント: コロン入り\ndraft_of: t\n---\nbody\n"
+    fm, _ = parse_frontmatter(text)
+    assert fm == {"draft_of": "t"}
+
+
+def test_parse_frontmatter_scalar_still_string() -> None:
+    """配列でないキーは従来どおり文字列のまま（後方互換）．"""
+    text = "---\ndraft_of: t\nmedia: hatena\n---\nbody\n"
+    fm, _ = parse_frontmatter(text)
+    assert fm["draft_of"] == "t"
+    assert isinstance(fm["draft_of"], str)
+
+
+# ---------- normalize_categories ----------
+
+
+def test_normalize_categories_none() -> None:
+    assert normalize_categories(None) == []
+
+
+def test_normalize_categories_list_passthrough() -> None:
+    assert normalize_categories(["PHP", "コミュニティ"]) == ["PHP", "コミュニティ"]
+
+
+def test_normalize_categories_strips_and_drops_empty() -> None:
+    assert normalize_categories([" PHP ", "", "  ", "地域"]) == ["PHP", "地域"]
+
+
+def test_normalize_categories_dedup_preserves_order() -> None:
+    assert normalize_categories(["PHP", "地域", "PHP"]) == ["PHP", "地域"]
+
+
+def test_normalize_categories_string_scalar() -> None:
+    """文字列スカラーは 1 要素のリストへ寄せる（誤って文字単位に割れない）．"""
+    assert normalize_categories("PHP") == ["PHP"]
+
+
+def test_normalize_categories_empty_string() -> None:
+    assert normalize_categories("") == []
+
+
+def test_normalize_categories_coerces_non_string_elements() -> None:
+    """非文字列の要素（数値など）も str 化して受ける（将来の YAML 移行対策）．"""
+    assert normalize_categories([2026, "PHP"]) == ["2026", "PHP"]
+
+
+def test_normalize_categories_non_string_scalar() -> None:
+    """非文字列スカラーも 1 要素へ寄せて str 化する（list(int) の TypeError を防ぐ）．"""
+    assert normalize_categories(2026) == ["2026"]
+
+
+# ---------- build_atom_entry（categories） ----------
+
+
+def test_build_atom_entry_no_categories_by_default() -> None:
+    """categories 省略時は <category> を出さない（後方互換）．"""
+    data = build_atom_entry("title", "body")
+    assert b"<category" not in data
+
+
+def test_build_atom_entry_empty_categories() -> None:
+    data = build_atom_entry("title", "body", [])
+    assert b"<category" not in data
+
+
+def test_build_atom_entry_single_category() -> None:
+    data = build_atom_entry("title", "body", ["PHP"])
+    assert b'<category term="PHP"' in data
+
+
+def test_build_atom_entry_multiple_categories_in_order() -> None:
+    data = build_atom_entry("title", "body", ["PHP", "コミュニティ"])
+    text = data.decode("utf-8")
+    assert '<category term="PHP"' in text
+    assert '<category term="コミュニティ"' in text
+    assert text.index('term="PHP"') < text.index('term="コミュニティ"')
+
+
+def test_build_atom_entry_escapes_category_term() -> None:
+    """term 属性の特殊文字をエスケープする（属性インジェクション防止）．"""
+    data = build_atom_entry("title", "body", ['a"b', "c&d", "e<f>"])
+    text = data.decode("utf-8")
+    assert 'term="a"b"' not in text
+    assert "&quot;" in text
+    assert "&amp;" in text
+    assert "&lt;" in text and "&gt;" in text
+
+
+def test_build_atom_entry_categories_still_draft() -> None:
+    data = build_atom_entry("title", "body", ["PHP"])
+    assert b"<app:draft>yes</app:draft>" in data
+
+
+# ---------- build_category_url ----------
+
+
+def test_build_category_url() -> None:
+    url = build_category_url("alice", "alice.hatenablog.com")
+    assert url == "https://blog.hatena.ne.jp/alice/alice.hatenablog.com/atom/category"
+
+
+# ---------- parse_category_document ----------
+
+
+SAMPLE_CATEGORY_DOC = b"""<?xml version="1.0" encoding="utf-8"?>
+<app:categories xmlns:app="http://www.w3.org/2007/app"
+                xmlns:atom="http://www.w3.org/2005/Atom"
+                fixed="no">
+  <atom:category term="Perl" />
+  <atom:category term="\xe3\x82\xb3\xe3\x83\x9f\xe3\x83\xa5\xe3\x83\x8b\xe3\x83\x86\xe3\x82\xa3" />
+</app:categories>
+"""
+
+
+def test_parse_category_document_basic() -> None:
+    terms = parse_category_document(SAMPLE_CATEGORY_DOC)
+    assert terms == ["Perl", "コミュニティ"]
+
+
+def test_parse_category_document_empty() -> None:
+    doc = (
+        b'<?xml version="1.0" encoding="utf-8"?>'
+        b'<app:categories xmlns:app="http://www.w3.org/2007/app" '
+        b'xmlns:atom="http://www.w3.org/2005/Atom" fixed="no"></app:categories>'
+    )
+    assert parse_category_document(doc) == []
+
+
+def test_parse_category_document_skips_blank_term() -> None:
+    doc = (
+        b'<?xml version="1.0" encoding="utf-8"?>'
+        b'<app:categories xmlns:app="http://www.w3.org/2007/app" '
+        b'xmlns:atom="http://www.w3.org/2005/Atom">'
+        b'<atom:category term="" />'
+        b'<atom:category term="PHP" />'
+        b"</app:categories>"
+    )
+    assert parse_category_document(doc) == ["PHP"]
+
+
+# ---------- fetch_categories（ネットワークはモック） ----------
+
+
+class _FakeCategoryResp:
+    def __init__(self, body: bytes) -> None:
+        self._body = body
+
+    def __enter__(self) -> "_FakeCategoryResp":
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return self._body
+
+
+def test_fetch_categories_parses_terms(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_urlopen(req: object, timeout: int = 30) -> _FakeCategoryResp:
+        return _FakeCategoryResp(SAMPLE_CATEGORY_DOC)
+
+    monkeypatch.setattr(publish.urllib.request, "urlopen", fake_urlopen)
+    assert fetch_categories("u", "b", "k") == ["Perl", "コミュニティ"]
+
+
+# ---------- publish_draft（categories 送信・上限警告） ----------
+
+
+def test_publish_draft_sends_categories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """frontmatter の categories が <category term> として送信 XML に載る．"""
+    sent: dict[str, bytes] = {}
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        sent["xml"] = xml
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    p = tmp_path / "2026-06-21-cat.md"
+    p.write_text(
+        '---\ndraft_of: "記事 A"\ncategories: [PHP, コミュニティ]\n---\n本文\n',
+        encoding="utf-8",
+    )
+    publish.publish_draft(p, "u", "b", "k")
+    xml_text = sent["xml"].decode("utf-8")
+    assert '<category term="PHP"' in xml_text
+    assert '<category term="コミュニティ"' in xml_text
+
+
+def test_publish_draft_warns_when_over_max_categories(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+) -> None:
+    """categories が上限 10 件を超えると警告する（送信は妨げない）．"""
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        return b"<id>tag:...-999</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    cats = ", ".join(f"c{i}" for i in range(11))
+    p = tmp_path / "2026-06-21-many.md"
+    p.write_text(
+        f'---\ndraft_of: "記事 A"\ncategories: [{cats}]\n---\n本文\n',
+        encoding="utf-8",
+    )
+    publish.publish_draft(p, "u", "b", "k")
+    captured = capsys.readouterr()
+    assert "10" in captured.err
