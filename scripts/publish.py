@@ -907,13 +907,17 @@ def _insert_more_block(blocks: list[str]) -> list[str]:
     `_drop_intro_heading` 適用後の最初の h2 で，その手前に導入本文がある場合のみ
     挿入する．先頭がいきなり h2（導入本文が無い）・h2 が無い・既にマーカーを含む
     場合は挿入しない（冪等）．挿入したマーカーは verbatim として後段でそのまま残る．
+
+    見出し判定は `_classify_block` と同じく各ブロックの先頭行で行う．見出し直後に
+    空行が無く本文が同じブロックに続く（`## 見出し\n本文`）場合も取りこぼさない．
+    コードフェンス内の `#` 行は `_classify_block` が verbatim と分類するため拾わない．
     """
     if any(_MORE_MARKER in b for b in blocks):
         return blocks
     for index, block in enumerate(blocks):
-        if "\n" in block:
+        if _classify_block(block) != "heading":
             continue
-        match = _HEADING_PATTERN.match(block.strip())
+        match = _HEADING_PATTERN.match(block.split("\n", 1)[0].strip())
         if match and len(match.group(1)) == 2:
             if index == 0:
                 # 先頭が h2 で導入本文が無い．折りたたむ導入が無いため挿入しない．

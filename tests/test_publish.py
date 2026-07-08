@@ -1748,6 +1748,14 @@ def test_transform_hatena_body_more_after_dropped_intro_heading() -> None:
     )
 
 
+def test_transform_hatena_body_more_before_heading_with_attached_body() -> None:
+    """見出し直後に空行が無い（見出しと本文が同一ブロック）場合も h2 を検出して挿入する．"""
+    body = "導入本文．\n\n## 見出し\n節本文．"
+    assert transform_hatena_body(body, insert_more=True) == (
+        "導入本文．  \n\n<!--more-->\n\n## 見出し\n節本文．\n"
+    )
+
+
 def test_publish_draft_applies_hatena_body_transform(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
