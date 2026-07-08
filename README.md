@@ -235,6 +235,8 @@ python scripts/publish.py drafts/2026-05-07-my-article.md --env-file /path/to/.e
 
 frontmatter の `categories` を読み，はてなのカテゴリーとして `<category term="...">` で送る．記述は配列とする．インラインフロー（`categories: [PHP, コミュニティ]`）とブロック形式（`- PHP` の各行）に対応する．空・未指定なら付けない．重複は順序を保って除く．推奨上限は 10 件で，超えると警告する（送信自体は妨げない）．`PUT` 更新でも毎回送り，はてな側を上書きする．本文からの選定は個人化版リポジトリ側の役割とし，本スクリプトは送信機構のみを担う．
 
+送信時は本文をはてなブログの Markdown 表示へ整形する．段落結合・段落間の余白・カード型リンクの埋め込み化に加え，「続きを読む」記法（`<!--more-->`）を自動挿入する．挿入位置は最初の `h2` 見出しの手前とする．導入本文が無い（先頭が見出し）場合や，既にマーカーがある場合は挿入しない（冪等）．記事ごとに無効化するには frontmatter へ `hatena_more: false` を書く．
+
 `--sync` は送信せず，はてな側のエントリ一覧を取得して正規化タイトル一致で `hatena_entry_id` を frontmatter へ記録する．送信済みだが ID 未記録の下書きを更新可能にするための回収に使う．同名（空白無視）が複数あれば取り違えを避けて記録しない．
 
 ```bash
@@ -255,7 +257,7 @@ python scripts/publish.py drafts/*.md --verify
 python scripts/publish.py --list-categories
 ```
 
-`--preview` は送信せず，はてな整形後の本文を標準出力へ出す．段落結合・段落間の余白・カード型リンクの埋め込み化の結果を，更新前の確認に使う．画像のアップロードは行わないため，画像記法は Markdown のまま残る．他のモード指定（`--sync`／`--verify`／`--list-categories`）とは併用できない．
+`--preview` は送信せず，はてな整形後の本文を標準出力へ出す．段落結合・段落間の余白・カード型リンクの埋め込み化・「続きを読む」の挿入の結果を，更新前の確認に使う．画像のアップロードは行わないため，画像記法は Markdown のまま残る．他のモード指定（`--sync`／`--verify`／`--list-categories`）とは併用できない．
 
 ```bash
 python scripts/publish.py drafts/*.md --preview

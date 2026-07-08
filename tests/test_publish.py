@@ -1703,6 +1703,59 @@ def test_transform_hatena_body_empty() -> None:
     assert transform_hatena_body("") == ""
 
 
+# ---------- transform_hatena_body（<!--more--> 自動挿入）----------
+
+
+def test_transform_hatena_body_inserts_more_before_first_heading() -> None:
+    """insert_more で最初の h2 見出しの直前へ <!--more--> を挿入する．"""
+    body = "導入本文．\n\n## 見出し\n\n節本文．"
+    assert transform_hatena_body(body, insert_more=True) == (
+        "導入本文．  \n\n<!--more-->\n\n## 見出し\n\n節本文．  \n"
+    )
+
+
+def test_transform_hatena_body_more_default_off() -> None:
+    """既定（insert_more 省略）では <!--more--> を挿入しない．"""
+    body = "導入本文．\n\n## 見出し"
+    assert "<!--more-->" not in transform_hatena_body(body)
+
+
+def test_transform_hatena_body_more_idempotent_when_present() -> None:
+    """本文に既に <!--more--> があれば二重挿入しない（冪等）．"""
+    body = "導入．\n\n<!--more-->\n\n## 見出し"
+    assert transform_hatena_body(body, insert_more=True) == (
+        "導入．  \n\n<!--more-->\n\n## 見出し\n"
+    )
+
+
+def test_transform_hatena_body_more_skipped_without_heading() -> None:
+    """h2 見出しが無ければ <!--more--> を挿入しない．"""
+    body = "本文だけ．\n\n続き．"
+    assert "<!--more-->" not in transform_hatena_body(body, insert_more=True)
+
+
+def test_transform_hatena_body_more_skipped_when_heading_leads() -> None:
+    """先頭がいきなり h2（導入本文が無い）なら <!--more--> を挿入しない．"""
+    body = "## まとめ\n\n本文．"
+    assert "<!--more-->" not in transform_hatena_body(body, insert_more=True)
+
+
+def test_transform_hatena_body_more_after_dropped_intro_heading() -> None:
+    """導入見出しを落とした後の最初の h2 の直前へ挿入する．"""
+    body = "## 導入\n\n導入本文．\n\n## 節\n\n節本文．"
+    assert transform_hatena_body(body, insert_more=True) == (
+        "導入本文．  \n\n<!--more-->\n\n## 節\n\n節本文．  \n"
+    )
+
+
+def test_transform_hatena_body_more_before_heading_with_attached_body() -> None:
+    """見出し直後に空行が無い（見出しと本文が同一ブロック）場合も h2 を検出して挿入する．"""
+    body = "導入本文．\n\n## 見出し\n節本文．"
+    assert transform_hatena_body(body, insert_more=True) == (
+        "導入本文．  \n\n<!--more-->\n\n## 見出し\n節本文．\n"
+    )
+
+
 def test_publish_draft_applies_hatena_body_transform(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1731,6 +1784,57 @@ def test_publish_draft_applies_hatena_body_transform(
     assert "[https://note.com/tomio2480/n/abc:embed:cite]" in body_xml
 
 
+def test_publish_draft_inserts_more_by_default(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """既定で送信本文の最初の h2 直前へ <!--more--> が挿入される．"""
+    draft = tmp_path / "2026-06-21-more.md"
+    draft.write_text(
+        '---\ndraft_of: "折りたたみ記事"\nhatena_entry_id: "778"\n---\n'
+        "導入本文．\n\n## 見出し\n\n節本文．\n",
+        encoding="utf-8",
+    )
+
+    sent: dict[str, bytes] = {}
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        sent["body"] = xml
+        return b"<id>tag:...-778</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    publish.publish_draft(draft, "u", "b", "k")
+
+    body_xml = sent["body"].decode("utf-8")
+    # 送信 XML では本文が html.escape される（はてな受信時に復元される）ため，
+    # マーカーはエスケープ形で載る．
+    assert "&lt;!--more--&gt;\n\n## 見出し" in body_xml
+
+
+def test_publish_draft_more_opt_out_via_frontmatter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """frontmatter の hatena_more: false で <!--more--> 挿入を無効化できる．"""
+    draft = tmp_path / "2026-06-21-nomore.md"
+    draft.write_text(
+        '---\ndraft_of: "折りたたみ無効"\nhatena_entry_id: "779"\n'
+        "hatena_more: false\n---\n"
+        "導入本文．\n\n## 見出し\n\n節本文．\n",
+        encoding="utf-8",
+    )
+
+    sent: dict[str, bytes] = {}
+
+    def fake_send(url, xml, username, api_key, method):  # noqa: ANN001
+        sent["body"] = xml
+        return b"<id>tag:...-779</id>"
+
+    monkeypatch.setattr(publish, "_send_entry", fake_send)
+    publish.publish_draft(draft, "u", "b", "k")
+
+    # エスケープ後の形でも現れないことを確認する（生文字列では XML 上に元々出ない）．
+    assert "&lt;!--more--&gt;" not in sent["body"].decode("utf-8")
+
+
 # ---------- preview_drafts ----------
 
 
@@ -1749,3 +1853,32 @@ def test_preview_drafts_writes_utf8_bytes(
     out = capsysbinary.readouterr().out.decode("utf-8")
     assert "本文 — つづき．  " in out
     assert "[https://example.com/x:embed:cite]" in out
+
+
+def test_preview_drafts_reflects_more_insertion(
+    tmp_path: Path, capsysbinary: pytest.CaptureFixture
+) -> None:
+    """プレビューにも <!--more--> の自動挿入が反映される．"""
+    draft = tmp_path / "2026-06-21-preview-more.md"
+    draft.write_text(
+        '---\ndraft_of: "折りたたみ確認"\n---\n導入本文．\n\n## 見出し\n\n節本文．\n',
+        encoding="utf-8",
+    )
+    publish.preview_drafts([draft])
+    out = capsysbinary.readouterr().out.decode("utf-8")
+    assert "<!--more-->\n\n## 見出し" in out
+
+
+def test_preview_drafts_more_opt_out_via_frontmatter(
+    tmp_path: Path, capsysbinary: pytest.CaptureFixture
+) -> None:
+    """プレビューでも hatena_more: false で <!--more--> 挿入を無効化できる．"""
+    draft = tmp_path / "2026-06-21-preview-nomore.md"
+    draft.write_text(
+        '---\ndraft_of: "折りたたみ無効"\nhatena_more: false\n---\n'
+        "導入本文．\n\n## 見出し\n\n節本文．\n",
+        encoding="utf-8",
+    )
+    publish.preview_drafts([draft])
+    out = capsysbinary.readouterr().out.decode("utf-8")
+    assert "<!--more-->" not in out

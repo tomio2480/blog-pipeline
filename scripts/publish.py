@@ -133,6 +133,14 @@ _HEADING_PATTERN = re.compile(r"^(#+)\s+(.*?)\s*$")
 # 書かずに本文から始める．ドラフトでは構成のため残し，送信時にここで落とす．
 _INTRO_HEADING_TITLES = {"導入", "はじめに"}
 
+# はてなブログの「続きを読む」（折りたたみ）記法．導入直後・最初の h2 の手前へ
+# 挿入し，一覧では導入までを表示させる運用を自動化する（`insert_more` で有効化）．
+_MORE_MARKER = "<!--more-->"
+
+# frontmatter のスカラーは `parse_frontmatter` が文字列で返す．真偽フラグの否定値と
+# して解釈する語（小文字化して比較）．該当時のみ既定有効の挙動を無効化する．
+_FALSE_FLAG_VALUES = frozenset({"false", "no", "off", "0"})
+
 
 def build_collection_url(username: str, blog_id: str) -> str:
     """コレクション URI（新規 POST 先・一覧取得先）を組み立てる．"""
@@ -320,6 +328,18 @@ def parse_frontmatter(
 
     body = "".join(lines[body_start:]).lstrip("\n")
     return fm_dict, body
+
+
+def _more_enabled(fm: dict[str, str | list[str]]) -> bool:
+    """frontmatter の `hatena_more` から「続きを読む」自動挿入の可否を判定する．
+
+    既定は有効（キーが無ければ挿入する）．`hatena_more: false` 等の否定値のときだけ
+    無効化する．`parse_frontmatter` はスカラーを文字列で返すため文字列で判定する．
+    """
+    value = fm.get("hatena_more")
+    if isinstance(value, str) and value.strip().lower() in _FALSE_FLAG_VALUES:
+        return False
+    return True
 
 
 def normalize_categories(raw: str | list[str] | None) -> list[str]:
@@ -880,6 +900,32 @@ def _drop_intro_heading(blocks: list[str]) -> list[str]:
     return blocks
 
 
+def _insert_more_block(blocks: list[str]) -> list[str]:
+    """最初の h2 見出しブロックの直前へ `_MORE_MARKER` ブロックを挿入する．
+
+    はてなブログの「続きを読む」を導入直後へ入れる手作業を自動化する．対象は
+    `_drop_intro_heading` 適用後の最初の h2 で，その手前に導入本文がある場合のみ
+    挿入する．先頭がいきなり h2（導入本文が無い）・h2 が無い・既にマーカーを含む
+    場合は挿入しない（冪等）．挿入したマーカーは verbatim として後段でそのまま残る．
+
+    見出し判定は `_classify_block` と同じく各ブロックの先頭行で行う．見出し直後に
+    空行が無く本文が同じブロックに続く（`## 見出し\n本文`）場合も取りこぼさない．
+    コードフェンス内の `#` 行は `_classify_block` が verbatim と分類するため拾わない．
+    """
+    if any(_MORE_MARKER in b for b in blocks):
+        return blocks
+    for index, block in enumerate(blocks):
+        if _classify_block(block) != "heading":
+            continue
+        match = _HEADING_PATTERN.match(block.split("\n", 1)[0].strip())
+        if match and len(match.group(1)) == 2:
+            if index == 0:
+                # 先頭が h2 で導入本文が無い．折りたたむ導入が無いため挿入しない．
+                return blocks
+            return blocks[:index] + [_MORE_MARKER] + blocks[index:]
+    return blocks
+
+
 def _needs_spacer(prev: str, nxt: str) -> bool:
     """ブロック境界へ区切り行（`_PARAGRAPH_SPACER`）を挟むかどうかを判定する．
 
@@ -893,7 +939,7 @@ def _needs_spacer(prev: str, nxt: str) -> bool:
     return prev in media or nxt in media
 
 
-def transform_hatena_body(body: str) -> str:
+def transform_hatena_body(body: str, *, insert_more: bool = False) -> str:
     """本文をはてなブログの Markdown 表示に合わせて整形する（本文確定前処理）．
 
     はてなブログの Markdown では段落内の単純な改行が不要な半角スペースになる．
@@ -911,10 +957,16 @@ def transform_hatena_body(body: str) -> str:
     見出し・箇条書き・画像・コードフェンス・引用・HTML・表は変換しない．
     画像記法は後段の `transform_body_images` へ委ねるため，ここでは残す．
     先頭の導入見出し（h2）は著者の慣習に従い落とし，本文から始める．
+
+    `insert_more` が真のときは，最初の h2 見出しの手前へはてなの「続きを読む」
+    記法 `<!--more-->` を挿入する（`_insert_more_block` を参照）．導入本文が無い
+    場合や既にマーカーがある場合は挿入しない．
     """
     blocks = _drop_intro_heading(_split_body_blocks(body))
     if not blocks:
         return ""
+    if insert_more:
+        blocks = _insert_more_block(blocks)
 
     kinds = [_classify_block(b) for b in blocks]
     rendered = [_render_block(k, b) for k, b in zip(kinds, blocks)]
@@ -1081,8 +1133,9 @@ def publish_draft(
 
     # 本文確定前処理: はてなブログの Markdown 表示に合わせ，段落結合・段落間の
     # 余白・カード型リンクの埋め込み化を行う．画像処理より先に適用し，画像記法は
-    # そのまま残して後段へ委ねる．
-    body = transform_hatena_body(body)
+    # そのまま残して後段へ委ねる．「続きを読む」は既定で挿入し，frontmatter の
+    # `hatena_more: false` で記事ごとに無効化できる．
+    body = transform_hatena_body(body, insert_more=_more_enabled(fm))
 
     # 本文確定前処理: 本文中の Markdown 画像をフォトライフへ上げ figure へ置換する．
     # 送信が確定したドラフトに対してのみ実行し，抑止・スキップ時の無駄な通信を避ける．
@@ -1210,8 +1263,9 @@ def preview_drafts(draft_paths: list[Path]) -> None:
     parts: list[str] = []
     for path in draft_paths:
         text = path.read_text(encoding="utf-8")
-        _, body = parse_frontmatter(text, source=str(path))
-        parts.append(f"===== {path} =====\n{transform_hatena_body(body)}")
+        fm, body = parse_frontmatter(text, source=str(path))
+        rendered = transform_hatena_body(body, insert_more=_more_enabled(fm))
+        parts.append(f"===== {path} =====\n{rendered}")
     sys.stdout.buffer.write("\n".join(parts).encode("utf-8"))
     sys.stdout.buffer.flush()
 
