@@ -40,7 +40,7 @@
 
 PR #58 では gemini-code-assist のレビューを 4 巡受けた．パス処理の堅牢化が中心で，採否を理由付きで返信した．次の知見を得た．
 
-- クロスプラットフォームのパス検証は実行 OS に依存しないようにする．Windows の `Path("/x").is_absolute()` は False を返す．`PurePosixPath` と `PureWindowsPath` の双方で解釈して判定する．
+- クロスプラットフォームのパス検証は実行 OS に依存させない．Windows の `Path("/x").is_absolute()` は False を返す．`PurePosixPath` と `PureWindowsPath` の双方で解釈して判定する．
 - ドライブ相対パス（`C:assets/x.png`）は `is_absolute()` が False だが `.drive` を持つ．放置すると `base_dir` が無視されるため `win.drive` も弾く．
 - パーセントデコードは検証の前に行う．後だと `%2e%2e%2f` のエンコードされた親参照を見逃す．
 - 正規表現の貪欲一致はバックトラックで丸括弧入りパスを正しく拾う．非貪欲は内側の `)` で先に切れて誤る．Bot の提案でも検証して採否を決める．
