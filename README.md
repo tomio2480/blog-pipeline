@@ -46,7 +46,7 @@
 
 ## 🏛️ 全体像
 
-人間が録音した音声を起点とする．音声は `whisper.cpp` で文字起こしする．これと人が手書きした人間メモを `build_material.py` が素材へまとめる．以降の工程はスクリプトと Claude Code の Subagent／Skill で進める．完成稿は AtomPub で常に下書き投稿し，公開判断は人間がはてなブログ管理画面で行う．
+人間が録音した音声を起点とする．音声は外部 CLI [transcription-tool](https://github.com/tomio2480/transcription-tool) の `transcribe-audio` で文字起こしする．これと人が手書きした人間メモを `build_material.py` が素材へまとめる．以降の工程はスクリプトと Claude Code の Subagent／Skill で進める．完成稿は AtomPub で常に下書き投稿し，公開判断は人間がはてなブログ管理画面で行う．
 
 旧来の Evernote／ENEX 経路は非推奨とする．`parse_enex.py` は既存素材の変換用に残置する．
 
@@ -79,7 +79,7 @@
 | 4 | lint 設定ファイル群，`draft-reviewer`，`review-draft`，`publish.py` | 完了 |
 | 5 | `build_dictionary.py`，月次運用ドキュメント，CI・Skill チューニング | 完了 |
 | 6 | `parse_enex.py` の 2 セクション化，`prompt-maker/` の非推奨化（Evernote AI 連携廃止），STT パイロット | 完了 |
-| 7 | `transcribe_audio.py`，`build_material.py`，`parse_enex.py` の非推奨化（Evernote 廃止・音声直接取り込み経路） | 完了 |
+| 7 | `transcribe-audio`，`build_material.py`，`parse_enex.py` の非推奨化（Evernote 廃止・音声直接取り込み経路） | 完了 |
 
 `.textlintrc.json`・`prh.yml`・`.markdownlint-cli2.yaml` はフェーズ 4 で追加する．それまでは中央テンプレート（[tomio2480/github-workflows](https://github.com/tomio2480/github-workflows)）の標準設定が CI で適用される．
 
@@ -89,7 +89,7 @@
 `parse_enex.py`・`list_materials.py`・`publish.py` は標準ライブラリのみで実装している．
 `prompt-maker/generate_prompts.py` も同様である．
 `build_dictionary.py` は形態素解析のため `janome` と `pyyaml` を使用する．
-`build_material.py` と `transcribe_audio.py` はフロントマター解析・辞書注入のため `pyyaml` を使用する．
+`build_material.py` はフロントマター解析のため `pyyaml` を使用する．
 テストは `pytest` を使う．
 
 ### Python 環境
@@ -131,30 +131,25 @@ python scripts/parse_enex.py path/to/export.enex --output-dir materials/raw
 🤖 Evernote AI 構造化情報セクションを人間メモと生の文字起こしの間に追加出力する（3 セクション構成）．
 ENEX 内の音声 base64 データは出力に含めない．
 
-### `transcribe_audio.py` の使い方
+### `transcribe-audio` の使い方
 
-録音音声を `whisper.cpp` で文字起こしし，生の文字起こしテキストを出力する．
-フェーズ 7 で新設した音声直接取り込み経路の文字起こし工程を担う．
-`ffmpeg` で 16kHz モノラル WAV へ変換した上で `whisper.cpp` の `large-v3` を実行する．
-
-`whisper.cpp` のバイナリとモデルは環境依存のため，パスを環境変数で渡す．
-未設定なら明示エラーで停止する．
+文字起こしは別リポジトリの [transcription-tool](https://github.com/tomio2480/transcription-tool) が提供する `transcribe-audio` を利用する．導入と `whisper.cpp` のバイナリ・モデル配置は同ツールの README を参照する．
 
 ```bash
-export WHISPER_CLI_PATH=/path/to/whisper-cli
-export WHISPER_MODEL_PATH=/path/to/ggml-large-v3.bin
-python scripts/transcribe_audio.py \
+pipx install git+https://github.com/tomio2480/transcription-tool
+transcribe-audio setup
+transcribe-audio check
+transcribe-audio transcribe \
   --audio path/to/2026-04-28-録音名.m4a \
   --vocabulary path/to/vocabulary.yml \
   --output-dir .scratch/transcription
 ```
 
-ループ対策として `-mc 0`（直前文脈の持ち越し無効化）を標準化する．
-`vocabulary.yml` の canonical 語を `--prompt`（初期プロンプト）へ注入し，固有名詞の正答率を補助する．
-ただし初期プロンプトは soft hint であり，誤認識の残りは後段の `transcript-corrector` で補正する前提とする．
-入力音声と中間 WAV，生の文字起こしは再生成できるため `.scratch/` 配下など Git 管理外へ出力する．
-`ffmpeg` は PATH 上にある前提とする．
-環境変数を `.env` から読みたい場合は `--env-file` を指定する（既定は `.env`）．`publish.py` と同じ規約である．
+`transcribe-audio transcribe` は `<output-dir>/<録音の stem>.txt` を生成する．
+生成パスは標準出力へ 1 行だけ返す．
+`build_material.py` が受け取るプレーンテキストの契約は従来と変わらない．
+入力音声と中間 WAV，生の文字起こしは再生成できるため，
+`.scratch/` 配下など Git 管理外へ出力する．
 
 ### `build_material.py` の使い方
 

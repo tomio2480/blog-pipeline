@@ -42,7 +42,7 @@
 ```
 [人間 録音]
     ↓
-[transcribe_audio.py]  whisper.cpp で文字起こし（vocabulary.yml を --prompt 注入）
+[transcribe-audio]     transcription-tool で文字起こし（vocabulary.yml は任意入力）
     ↓
 [人間 メモ Markdown 手書き]  音声と共通の basename で対応づけ
     ↓
@@ -67,7 +67,7 @@
 [人間 公開判断]
 ```
 
-文字起こしは `whisper.cpp` をローカルで実行する．`vocabulary.yml` の canonical 語を `--prompt` へ注入する．
+文字起こしは外部 CLI `transcribe-audio` をローカルで実行する．実体は `transcription-tool` が所有し，`vocabulary.yml` を渡した場合は canonical 語を初期プロンプトへ注入する．
 固有名詞校閲・構造化・リンク整理は `blog-private` 側の Claude Subagent が担当する．
 旧来の Evernote／ENEX 経路は非推奨とする．`parse_enex.py` は既存素材の変換用に残置する．
 `generate_prompts.py` による Evernote AI 連携も 2026-06-12 に廃止した．
@@ -78,7 +78,6 @@
 ```
 blog-pipeline/
 ├─ scripts/
-│  ├─ transcribe_audio.py     録音音声 → 生の文字起こし（whisper.cpp，フェーズ 7）
 │  ├─ build_material.py       人間メモ + 生文字起こし → 2 セクション素材（フェーズ 7）
 │  ├─ parse_enex.py           ENEX → Markdown（非推奨．旧素材変換用）
 │  ├─ list_materials.py       素材一覧の取得
@@ -125,7 +124,7 @@ blog-pipeline/
 | 工程 | 担当 | モデル | 理由 |
 |---|---|---|---|
 | 音声録音 | 人間 | - | 既存習慣に載せる |
-| 文字起こし | スクリプト（`whisper.cpp`）| - | ローカルで決定論的に実行 |
+| 文字起こし | 外部 CLI `transcribe-audio` | - | ローカルで決定論的に実行 |
 | 人間メモ手書き | 人間 | - | URL・関連資料の補足 |
 | 2 セクション素材生成 | スクリプト（`build_material.py`）| - | 決定論的 |
 | ENML → Markdown 変換（非推奨）| スクリプト（`parse_enex.py`）| - | 旧素材変換用 |
@@ -169,7 +168,7 @@ Skill はオーケストレーション役，Subagent は個別タスクの実�
 | 4 | `.textlintrc.json`，`prh.yml`，`.markdownlint-cli2.yaml` の汎用設定，`agent-templates/draft-reviewer.md`，`skill-templates/review-draft/`，`publish.py` | 完了 |
 | 5 | `build_dictionary.py`，月次運用のドキュメント，CI・Skill チューニング | 完了 |
 | 6 | `parse_enex.py` の 2 セクション化（`<h1>` 非依存），`scripts/prompt-maker/` の非推奨化，STT パイロットによる `whisper.cpp` 採用判断 | 完了 |
-| 7 | `transcribe_audio.py`，`build_material.py`，`parse_enex.py` の非推奨化（Evernote 廃止・音声直接取り込み経路） | 完了 |
+| 7 | `transcribe-audio`，`build_material.py`，`parse_enex.py` の非推奨化（Evernote 廃止・音声直接取り込み経路） | 完了 |
 
 各フェーズは GitHub Issue（`phase-N` ラベル）で管理する．フェーズ間で依存があれば Issue 本文に明記する．
 
@@ -261,6 +260,8 @@ python ../blog-pipeline/scripts/build_material.py \
 | ENEX | Evernote の公式エクスポート形式．XML ベースで，ENML 本文と添付，タグを内包する |
 | ENML | Evernote 独自のノート記法．XML ベース |
 | Evernote AI | Evernote 内蔵の AI 機能．文字起こしと構造化（要点抽出，補足情報の URL 付与等）を提供．2026-06-12 に利用廃止 |
+| transcription-tool | 複数リポジトリで共用する音声文字起こし CLI の配布元．`transcribe-audio` コマンドを提供する |
+| transcribe-audio | `transcription-tool` が提供する CLI．録音からプレーンテキストを生成し，`build_material.py` へ渡す |
 | whisper.cpp | ローカルで動作する音声文字起こしエンジン．`large-v3` モデルと `--prompt` 注入を用いる |
 | AtomPub | はてなブログ公式の投稿用 API．WSSE 認証 |
 | Subagent | Claude Code が提供する，独立コンテキストで動く別エージェント |
