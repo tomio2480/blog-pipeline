@@ -262,7 +262,7 @@ python ../blog-pipeline/scripts/build_material.py \
 | Evernote AI | Evernote 内蔵の AI 機能．文字起こしと構造化（要点抽出，補足情報の URL 付与等）を提供．2026-06-12 に利用廃止 |
 | transcription-tool | 複数リポジトリで共用する音声文字起こし CLI の配布元．`transcribe-audio` コマンドを提供する |
 | transcribe-audio | `transcription-tool` が提供する CLI．録音からプレーンテキストを生成し，`build_material.py` へ渡す |
-| whisper.cpp | ローカルで動作する音声文字起こしエンジン．`large-v3` モデルと `--prompt` 注入を用いる |
+| whisper.cpp | `transcription-tool` の `transcribe-audio` が内部で使用するローカル音声文字起こしエンジン．`large-v3` モデルと `--prompt` 注入を用いる |
 | AtomPub | はてなブログ公式の投稿用 API．WSSE 認証 |
 | Subagent | Claude Code が提供する，独立コンテキストで動く別エージェント |
 | Skill | Claude Code が提供する，特定タスク用の常設指示と実装 |
